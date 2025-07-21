@@ -86,7 +86,9 @@ class ZetaMathGame {
         });
         
         // Practice drill
-        document.getElementById('start-drill').addEventListener('click', () => this.startPracticeDrill());
+        document.getElementById('start-ai-drill').addEventListener('click', () => this.startAIPracticeDrill());
+        document.getElementById('start-wrong-questions-drill').addEventListener('click', () => this.startWrongQuestionsDrill());
+        document.getElementById('clear-wrong-questions').addEventListener('click', () => this.clearWrongQuestionsConfirm());
         document.getElementById('back-from-drill').addEventListener('click', () => this.showScreen('main-menu'));
     }
     
@@ -135,9 +137,12 @@ class ZetaMathGame {
             endTime: null
         };
         
-        // Reset focus operation for regular games (not practice drills)
+        // Reset focus operation and practice mode for regular games (not practice drills)
         if (!this.focusOperation) {
             this.focusOperation = null;
+        }
+        if (!this.practiceMode) {
+            this.practiceMode = null;
         }
         
         this.showScreen('game-screen');
@@ -214,78 +219,14 @@ class ZetaMathGame {
     generateNextQuestion() {
         this.questionStartTime = Date.now();
         
-        const mode = this.currentMode;
-        let operation, num1, num2, answer;
-        
-        // Check if we're in a focused practice drill
-        if (this.focusOperation && this.focusOperation !== 'all') {
-            operation = this.focusOperation;
-        } else if (mode === 'free') {
-            const operations = this.modes.free.operations;
-            operation = operations[Math.floor(Math.random() * operations.length)];
-        } else if (mode === 'custom') {
-            // Custom mode for practice drills with specific focus
-            operation = this.focusOperation || 'addition';
-        } else {
-            const operations = ['addition', 'subtraction', 'multiplication', 'division'];
-            operation = operations[Math.floor(Math.random() * operations.length)];
+        // Check if we're in wrong questions practice mode
+        if (this.practiceMode === 'wrong-questions') {
+            this.generateWrongQuestionForPractice();
+            return;
         }
         
-        switch (operation) {
-            case 'addition':
-                const addRange = mode === 'free' ? this.modes.free.ranges.addition : this.modes[mode].addition;
-                num1 = this.randomBetween(addRange.min, addRange.max);
-                num2 = this.randomBetween(addRange.min, addRange.max);
-                answer = num1 + num2;
-                this.currentQuestion = {
-                    operation: 'addition',
-                    num1, num2, answer,
-                    display: `${num1} + ${num2} = ?`
-                };
-                break;
-                
-            case 'subtraction':
-                const subRange = mode === 'free' ? this.modes.free.ranges.subtraction : this.modes[mode].subtraction;
-                num1 = this.randomBetween(subRange.min, subRange.max);
-                num2 = this.randomBetween(subRange.min, Math.min(num1, subRange.max));
-                answer = num1 - num2;
-                this.currentQuestion = {
-                    operation: 'subtraction',
-                    num1, num2, answer,
-                    display: `${num1} - ${num2} = ?`
-                };
-                break;
-                
-            case 'multiplication':
-                const mulRange = mode === 'free' ? this.modes.free.ranges.multiplication : this.modes[mode].multiplication;
-                num1 = this.randomBetween(mulRange.factor1.min, mulRange.factor1.max);
-                num2 = this.randomBetween(mulRange.factor2.min, mulRange.factor2.max);
-                answer = num1 * num2;
-                this.currentQuestion = {
-                    operation: 'multiplication',
-                    num1, num2, answer,
-                    display: `${num1} × ${num2} = ?`
-                };
-                break;
-                
-            case 'division':
-                // Reverse multiplication for division
-                const divRange = mode === 'free' ? this.modes.free.ranges.multiplication : this.modes[mode].multiplication;
-                const factor1 = this.randomBetween(divRange.factor1.min, divRange.factor1.max);
-                const factor2 = this.randomBetween(divRange.factor2.min, divRange.factor2.max);
-                const product = factor1 * factor2;
-                answer = factor1;
-                this.currentQuestion = {
-                    operation: 'division',
-                    num1: product, num2: factor2, answer,
-                    display: `${product} ÷ ${factor2} = ?`
-                };
-                break;
-        }
-        
-        document.getElementById('question-display').textContent = this.currentQuestion.display;
-        document.getElementById('answer-input').value = '';
-        document.getElementById('answer-input').focus();
+        // Regular question generation
+        this.generateRegularQuestion();
     }
     
     submitAnswer() {
@@ -305,6 +246,11 @@ class ZetaMathGame {
         
         this.gameData.push(questionData);
         this.currentSession.questions.push(questionData);
+        
+        // Store wrong questions for practice
+        if (!questionData.correct) {
+            this.saveWrongQuestion(questionData);
+        }
         
         if (userAnswer === correctAnswer) {
             this.score++;
@@ -791,6 +737,24 @@ class ZetaMathGame {
         const recommendation = this.generateRecommendation();
         document.getElementById('drill-description').innerHTML = recommendation.description;
         this.currentDrillConfig = recommendation.config;
+        
+        // Update wrong questions info
+        const wrongQuestions = this.getWrongQuestions();
+        const countElement = document.getElementById('wrong-questions-count');
+        const wrongQuestionsBtn = document.getElementById('start-wrong-questions-drill');
+        
+        if (wrongQuestions.length === 0) {
+            countElement.textContent = "You have no wrong questions to practice yet";
+            countElement.style.color = "#38a169";
+            wrongQuestionsBtn.disabled = true;
+            wrongQuestionsBtn.textContent = "No Wrong Questions Available";
+        } else {
+            countElement.textContent = `You have ${wrongQuestions.length} wrong questions to practice`;
+            countElement.style.color = "#e53e3e";
+            wrongQuestionsBtn.disabled = false;
+            wrongQuestionsBtn.textContent = "Practice Wrong Questions";
+        }
+        
         this.showScreen('practice-drill-screen');
     }
     
@@ -897,22 +861,198 @@ class ZetaMathGame {
         return 'easy';
     }
     
-    startPracticeDrill() {
+    startAIPracticeDrill() {
         const duration = parseInt(document.getElementById('drill-duration').value);
         
-        // Set up drill based on recommendation
+        // Set up drill based on AI recommendation
         this.currentMode = this.currentDrillConfig.mode;
         this.currentTimeLimit = duration;
+        this.practiceMode = 'ai-recommendation';
         
         // If focusing on specific operation, set focus
         if (this.currentDrillConfig.focus !== 'all') {
             this.focusOperation = this.currentDrillConfig.focus;
-            console.log(`Starting practice drill focused on: ${this.focusOperation}`);
+            console.log(`Starting AI practice drill focused on: ${this.focusOperation}`);
         } else {
             this.focusOperation = null;
         }
         
         this.startGame();
+    }
+    
+    startWrongQuestionsDrill() {
+        const wrongQuestions = this.getWrongQuestions();
+        if (wrongQuestions.length === 0) {
+            alert('No wrong questions available to practice!');
+            return;
+        }
+        
+        const duration = parseInt(document.getElementById('drill-duration').value);
+        
+        // Set up drill for wrong questions
+        this.currentMode = 'medium'; // Default difficulty for wrong questions
+        this.currentTimeLimit = duration;
+        this.practiceMode = 'wrong-questions';
+        this.focusOperation = null;
+        
+        console.log(`Starting wrong questions drill with ${wrongQuestions.length} questions`);
+        this.startGame();
+    }
+    
+    clearWrongQuestionsConfirm() {
+        const wrongQuestions = this.getWrongQuestions();
+        if (wrongQuestions.length === 0) {
+            alert('No wrong questions to clear!');
+            return;
+        }
+        
+        if (confirm(`Are you sure you want to clear all ${wrongQuestions.length} wrong questions? This cannot be undone.`)) {
+            this.clearWrongQuestions();
+            this.showPracticeDrill(); // Refresh the screen
+            alert('Wrong questions cleared successfully!');
+        }
+    }
+    
+    saveWrongQuestion(questionData) {
+        let wrongQuestions = JSON.parse(localStorage.getItem('zetamath_wrong_questions') || '[]');
+        
+        // Add the wrong question with timestamp
+        const wrongQuestion = {
+            ...questionData,
+            timestamp: Date.now(),
+            practiceCount: 0
+        };
+        
+        wrongQuestions.push(wrongQuestion);
+        
+        // Keep only last 50 wrong questions to prevent storage overflow
+        if (wrongQuestions.length > 50) {
+            wrongQuestions = wrongQuestions.slice(-50);
+        }
+        
+        localStorage.setItem('zetamath_wrong_questions', JSON.stringify(wrongQuestions));
+    }
+    
+    getWrongQuestions() {
+        return JSON.parse(localStorage.getItem('zetamath_wrong_questions') || '[]');
+    }
+    
+    clearWrongQuestions() {
+        localStorage.removeItem('zetamath_wrong_questions');
+    }
+    
+    generateWrongQuestionForPractice() {
+        const wrongQuestions = this.getWrongQuestions();
+        
+        if (wrongQuestions.length === 0) {
+            // Fallback to regular question generation
+            return this.generateRegularQuestion();
+        }
+        
+        // Sort by practice count (least practiced first) and recent timestamp
+        wrongQuestions.sort((a, b) => {
+            if (a.practiceCount !== b.practiceCount) {
+                return a.practiceCount - b.practiceCount;
+            }
+            return b.timestamp - a.timestamp;
+        });
+        
+        // Pick from the least practiced questions
+        const selectedQuestion = wrongQuestions[0];
+        
+        // Create a new question based on the wrong one
+        this.currentQuestion = {
+            operation: selectedQuestion.operation,
+            num1: selectedQuestion.num1,
+            num2: selectedQuestion.num2,
+            answer: selectedQuestion.answer,
+            display: selectedQuestion.display,
+            isFromWrongQuestions: true,
+            originalQuestionId: selectedQuestion.timestamp
+        };
+        
+        // Increment practice count
+        selectedQuestion.practiceCount++;
+        localStorage.setItem('zetamath_wrong_questions', JSON.stringify(wrongQuestions));
+        
+        document.getElementById('question-display').textContent = this.currentQuestion.display;
+        document.getElementById('answer-input').value = '';
+        document.getElementById('answer-input').focus();
+    }
+    
+    generateRegularQuestion() {
+        const mode = this.currentMode;
+        let operation, num1, num2, answer;
+        
+        // Check if we're in a focused practice drill
+        if (this.focusOperation && this.focusOperation !== 'all') {
+            operation = this.focusOperation;
+        } else if (mode === 'free') {
+            const operations = this.modes.free.operations;
+            operation = operations[Math.floor(Math.random() * operations.length)];
+        } else if (mode === 'custom') {
+            // Custom mode for practice drills with specific focus
+            operation = this.focusOperation || 'addition';
+        } else {
+            const operations = ['addition', 'subtraction', 'multiplication', 'division'];
+            operation = operations[Math.floor(Math.random() * operations.length)];
+        }
+        
+        switch (operation) {
+            case 'addition':
+                const addRange = mode === 'free' ? this.modes.free.ranges.addition : this.modes[mode].addition;
+                num1 = this.randomBetween(addRange.min, addRange.max);
+                num2 = this.randomBetween(addRange.min, addRange.max);
+                answer = num1 + num2;
+                this.currentQuestion = {
+                    operation: 'addition',
+                    num1, num2, answer,
+                    display: `${num1} + ${num2} = ?`
+                };
+                break;
+                
+            case 'subtraction':
+                const subRange = mode === 'free' ? this.modes.free.ranges.subtraction : this.modes[mode].subtraction;
+                num1 = this.randomBetween(subRange.min, subRange.max);
+                num2 = this.randomBetween(subRange.min, Math.min(num1, subRange.max));
+                answer = num1 - num2;
+                this.currentQuestion = {
+                    operation: 'subtraction',
+                    num1, num2, answer,
+                    display: `${num1} - ${num2} = ?`
+                };
+                break;
+                
+            case 'multiplication':
+                const mulRange = mode === 'free' ? this.modes.free.ranges.multiplication : this.modes[mode].multiplication;
+                num1 = this.randomBetween(mulRange.factor1.min, mulRange.factor1.max);
+                num2 = this.randomBetween(mulRange.factor2.min, mulRange.factor2.max);
+                answer = num1 * num2;
+                this.currentQuestion = {
+                    operation: 'multiplication',
+                    num1, num2, answer,
+                    display: `${num1} × ${num2} = ?`
+                };
+                break;
+                
+            case 'division':
+                // Reverse multiplication for division
+                const divRange = mode === 'free' ? this.modes.free.ranges.multiplication : this.modes[mode].multiplication;
+                const factor1 = this.randomBetween(divRange.factor1.min, divRange.factor1.max);
+                const factor2 = this.randomBetween(divRange.factor2.min, divRange.factor2.max);
+                const product = factor1 * factor2;
+                answer = factor1;
+                this.currentQuestion = {
+                    operation: 'division',
+                    num1: product, num2: factor2, answer,
+                    display: `${product} ÷ ${factor2} = ?`
+                };
+                break;
+        }
+        
+        document.getElementById('question-display').textContent = this.currentQuestion.display;
+        document.getElementById('answer-input').value = '';
+        document.getElementById('answer-input').focus();
     }
     
     randomBetween(min, max) {

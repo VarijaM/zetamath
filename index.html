@@ -220,8 +220,26 @@
 
         <!-- Practice Drill Screen -->
         <div id="practice-drill-screen" class="screen">
-            <h2>Recommended Practice Drill</h2>
-            <div id="drill-description"></div>
+            <h2>Practice Options</h2>
+            
+            <div class="practice-options">
+                <div class="practice-option-card" id="ai-recommendation-card">
+                    <h3>🎯 AI Recommended Practice</h3>
+                    <div id="drill-description"></div>
+                    <button id="start-ai-drill">Start AI Recommended Drill</button>
+                </div>
+                
+                <div class="practice-option-card" id="wrong-questions-card">
+                    <h3>❌ Practice Wrong Questions</h3>
+                    <div id="wrong-questions-info">
+                        <p id="wrong-questions-count">You have 0 wrong questions to practice</p>
+                        <p>Focus on questions you've previously answered incorrectly to improve weak spots</p>
+                    </div>
+                    <button id="start-wrong-questions-drill">Practice Wrong Questions</button>
+                    <button id="clear-wrong-questions" class="secondary-btn">Clear Wrong Questions</button>
+                </div>
+            </div>
+            
             <div class="drill-config">
                 <label>Practice Duration:</label>
                 <select id="drill-duration">
@@ -231,8 +249,8 @@
                     <option value="300">5 minutes</option>
                 </select>
             </div>
+            
             <div class="navigation-buttons">
-                <button id="start-drill">Start Practice Drill</button>
                 <button id="back-from-drill">Back to Menu</button>
             </div>
         </div>
