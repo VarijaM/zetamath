@@ -90,6 +90,11 @@ class ZetaMathGame {
         document.getElementById('start-wrong-questions-drill').addEventListener('click', () => this.startWrongQuestionsDrill());
         document.getElementById('clear-wrong-questions').addEventListener('click', () => this.clearWrongQuestionsConfirm());
         document.getElementById('back-from-drill').addEventListener('click', () => this.showScreen('main-menu'));
+        
+        // Practice time selection
+        document.querySelectorAll('.practice-time-btn').forEach(btn => {
+            btn.addEventListener('click', () => this.selectPracticeTime(parseInt(btn.dataset.time)));
+        });
     }
     
     selectMode(mode) {
@@ -813,10 +818,28 @@ class ZetaMathGame {
         document.getElementById(`${tabName}-tab`).classList.add('active');
     }
     
+    selectPracticeTime(time) {
+        this.currentPracticeTimeLimit = time;
+        document.querySelectorAll('.practice-time-btn').forEach(btn => btn.classList.remove('selected'));
+        document.querySelector(`[data-time="${time}"]`).classList.add('selected');
+    }
+    
     showPracticeDrill() {
         const recommendation = this.generateRecommendation();
         document.getElementById('drill-description').innerHTML = recommendation.description;
         this.currentDrillConfig = recommendation.config;
+        
+        // Set default practice time if not set
+        if (!this.currentPracticeTimeLimit) {
+            this.currentPracticeTimeLimit = 60; // Default to 60 seconds
+        }
+        
+        // Update practice time button selection
+        document.querySelectorAll('.practice-time-btn').forEach(btn => btn.classList.remove('selected'));
+        const defaultBtn = document.querySelector(`[data-time="${this.currentPracticeTimeLimit}"]`);
+        if (defaultBtn) {
+            defaultBtn.classList.add('selected');
+        }
         
         // Update wrong questions info
         const wrongQuestions = this.getWrongQuestions();
@@ -942,11 +965,14 @@ class ZetaMathGame {
     }
     
     startAIPracticeDrill() {
-        const duration = parseInt(document.getElementById('drill-duration').value);
+        if (!this.currentPracticeTimeLimit) {
+            alert('Please select a practice duration!');
+            return;
+        }
         
         // Set up drill based on AI recommendation
         this.currentMode = this.currentDrillConfig.mode;
-        this.currentTimeLimit = duration;
+        this.currentTimeLimit = this.currentPracticeTimeLimit;
         this.practiceMode = 'ai-recommendation';
         
         // If focusing on specific operation, set focus
@@ -967,11 +993,14 @@ class ZetaMathGame {
             return;
         }
         
-        const duration = parseInt(document.getElementById('drill-duration').value);
+        if (!this.currentPracticeTimeLimit) {
+            alert('Please select a practice duration!');
+            return;
+        }
         
         // Set up drill for wrong questions
         this.currentMode = 'medium'; // Default difficulty for wrong questions
-        this.currentTimeLimit = duration;
+        this.currentTimeLimit = this.currentPracticeTimeLimit;
         this.practiceMode = 'wrong-questions';
         this.focusOperation = null;
         

@@ -244,13 +244,16 @@
             </div>
             
             <div class="drill-config">
-                <label>Practice Duration:</label>
-                <select id="drill-duration">
-                    <option value="30">30 seconds</option>
-                    <option value="60" selected>1 minute</option>
-                    <option value="120">2 minutes</option>
-                    <option value="300">5 minutes</option>
-                </select>
+                <h3>Select Practice Duration</h3>
+                <div class="practice-time-buttons">
+                    <button class="practice-time-btn" data-time="15">15s</button>
+                    <button class="practice-time-btn" data-time="20">20s</button>
+                    <button class="practice-time-btn" data-time="30">30s</button>
+                    <button class="practice-time-btn" data-time="60" data-selected="true">60s</button>
+                    <button class="practice-time-btn" data-time="120">2m</button>
+                    <button class="practice-time-btn" data-time="300">5m</button>
+                    <button class="practice-time-btn" data-time="600">10m</button>
+                </div>
             </div>
             
             <div class="navigation-buttons">
