@@ -502,10 +502,15 @@ class ZetaMathGame {
     }
     
     createOperationChart(history) {
-        const ctx = document.getElementById('operation-chart').getContext('2d');
+        this.createOperationAccuracyChart(history);
+        this.createOperationTimeChart(history);
+    }
+    
+    createOperationAccuracyChart(history) {
+        const ctx = document.getElementById('operation-accuracy-chart').getContext('2d');
         
-        if (window.operationChart) {
-            window.operationChart.destroy();
+        if (window.operationAccuracyChart) {
+            window.operationAccuracyChart.destroy();
         }
         
         const operationStats = {
@@ -530,41 +535,132 @@ class ZetaMathGame {
         const accuracies = Object.values(operationStats).map(stat => 
             stat.total > 0 ? Math.round((stat.correct / stat.total) * 100) : 0
         );
-        const avgTimes = Object.values(operationStats).map(stat => 
-            stat.total > 0 ? (stat.totalTime / stat.total).toFixed(1) : 0
-        );
         
-        window.operationChart = new Chart(ctx, {
+        window.operationAccuracyChart = new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: labels,
                 datasets: [{
                     label: 'Accuracy (%)',
                     data: accuracies,
-                    backgroundColor: 'rgba(102, 126, 234, 0.8)',
-                    yAxisID: 'y'
-                }, {
-                    label: 'Avg Time (s)',
-                    data: avgTimes,
-                    backgroundColor: 'rgba(56, 161, 105, 0.8)',
-                    yAxisID: 'y1'
+                    backgroundColor: [
+                        'rgba(72, 187, 120, 0.8)',   // Addition - Green
+                        'rgba(237, 137, 54, 0.8)',   // Subtraction - Orange
+                        'rgba(229, 62, 62, 0.8)',    // Multiplication - Red
+                        'rgba(159, 122, 234, 0.8)'   // Division - Purple
+                    ],
+                    borderColor: [
+                        '#48bb78',
+                        '#ed8936', 
+                        '#e53e3e',
+                        '#9f7aea'
+                    ],
+                    borderWidth: 2
                 }]
             },
             options: {
                 responsive: true,
                 scales: {
                     y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
+                        beginAtZero: true,
+                        max: 100,
                         title: { display: true, text: 'Accuracy (%)' }
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        title: { display: true, text: 'Average Time (s)' },
-                        grid: { drawOnChartArea: false }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            afterBody: function(context) {
+                                const opIndex = context[0].dataIndex;
+                                const operations = Object.keys(operationStats);
+                                const stat = operationStats[operations[opIndex]];
+                                return [
+                                    `Correct: ${stat.correct}/${stat.total}`,
+                                    `Questions practiced: ${stat.total}`
+                                ];
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    createOperationTimeChart(history) {
+        const ctx = document.getElementById('operation-time-chart').getContext('2d');
+        
+        if (window.operationTimeChart) {
+            window.operationTimeChart.destroy();
+        }
+        
+        const operationStats = {
+            addition: { total: 0, correct: 0, totalTime: 0 },
+            subtraction: { total: 0, correct: 0, totalTime: 0 },
+            multiplication: { total: 0, correct: 0, totalTime: 0 },
+            division: { total: 0, correct: 0, totalTime: 0 }
+        };
+        
+        history.forEach(session => {
+            session.questions.forEach(q => {
+                const op = q.operation;
+                operationStats[op].total++;
+                if (q.correct) operationStats[op].correct++;
+                operationStats[op].totalTime += q.timeSpent;
+            });
+        });
+        
+        const labels = Object.keys(operationStats).map(op => 
+            op.charAt(0).toUpperCase() + op.slice(1)
+        );
+        const avgTimes = Object.values(operationStats).map(stat => 
+            stat.total > 0 ? (stat.totalTime / stat.total).toFixed(1) : 0
+        );
+        
+        window.operationTimeChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Average Time (seconds)',
+                    data: avgTimes,
+                    backgroundColor: [
+                        'rgba(72, 187, 120, 0.8)',   // Addition - Green
+                        'rgba(237, 137, 54, 0.8)',   // Subtraction - Orange
+                        'rgba(229, 62, 62, 0.8)',    // Multiplication - Red
+                        'rgba(159, 122, 234, 0.8)'   // Division - Purple
+                    ],
+                    borderColor: [
+                        '#48bb78',
+                        '#ed8936', 
+                        '#e53e3e',
+                        '#9f7aea'
+                    ],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Average Time (seconds)' }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            afterBody: function(context) {
+                                const opIndex = context[0].dataIndex;
+                                const operations = Object.keys(operationStats);
+                                const stat = operationStats[operations[opIndex]];
+                                return [
+                                    `Total time: ${stat.totalTime.toFixed(1)}s`,
+                                    `Questions: ${stat.total}`
+                                ];
+                            }
+                        }
                     }
                 }
             }
