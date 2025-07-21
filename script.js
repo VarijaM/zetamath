@@ -433,14 +433,44 @@ class ZetaMathGame {
                         type: 'linear',
                         display: true,
                         position: 'left',
-                        title: { display: true, text: 'Score' }
+                        title: { 
+                            display: true, 
+                            text: 'Score',
+                            font: { family: 'Work Sans', size: 14 }
+                        },
+                        ticks: {
+                            font: { family: 'Work Sans' }
+                        }
                     },
                     y1: {
                         type: 'linear',
                         display: true,
                         position: 'right',
-                        title: { display: true, text: 'Accuracy (%)' },
-                        grid: { drawOnChartArea: false }
+                        title: { 
+                            display: true, 
+                            text: 'Accuracy (%)',
+                            font: { family: 'Work Sans', size: 14 }
+                        },
+                        grid: { drawOnChartArea: false },
+                        ticks: {
+                            font: { family: 'Work Sans' }
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            font: { family: 'Work Sans' }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        labels: {
+                            font: { family: 'Work Sans' }
+                        }
+                    },
+                    tooltip: {
+                        titleFont: { family: 'Work Sans' },
+                        bodyFont: { family: 'Work Sans' }
                     }
                 }
             }
@@ -506,16 +536,37 @@ class ZetaMathGame {
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
+                layout: {
+                    padding: {
+                        top: 20,
+                        bottom: 20
+                    }
+                },
                 scales: {
                     y: {
                         beginAtZero: true,
                         max: 100,
-                        title: { display: true, text: 'Accuracy (%)' }
+                        title: { 
+                            display: true, 
+                            text: 'Accuracy (%)',
+                            font: { family: 'Work Sans', size: 14 }
+                        },
+                        ticks: {
+                            font: { family: 'Work Sans' }
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            font: { family: 'Work Sans' }
+                        }
                     }
                 },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
+                        titleFont: { family: 'Work Sans' },
+                        bodyFont: { family: 'Work Sans' },
                         callbacks: {
                             afterBody: function(context) {
                                 const opIndex = context[0].dataIndex;
@@ -587,15 +638,36 @@ class ZetaMathGame {
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
+                layout: {
+                    padding: {
+                        top: 20,
+                        bottom: 20
+                    }
+                },
                 scales: {
                     y: {
                         beginAtZero: true,
-                        title: { display: true, text: 'Average Time (seconds)' }
+                        title: { 
+                            display: true, 
+                            text: 'Average Time (seconds)',
+                            font: { family: 'Work Sans', size: 14 }
+                        },
+                        ticks: {
+                            font: { family: 'Work Sans' }
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            font: { family: 'Work Sans' }
+                        }
                     }
                 },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
+                        titleFont: { family: 'Work Sans' },
+                        bodyFont: { family: 'Work Sans' },
                         callbacks: {
                             afterBody: function(context) {
                                 const opIndex = context[0].dataIndex;
@@ -700,9 +772,17 @@ class ZetaMathGame {
                 plugins: {
                     title: {
                         display: true,
-                        text: 'Performance by Time Mode'
+                        text: 'Performance by Time Mode',
+                        font: { family: 'Work Sans', size: 16 }
+                    },
+                    legend: {
+                        labels: {
+                            font: { family: 'Work Sans' }
+                        }
                     },
                     tooltip: {
+                        titleFont: { family: 'Work Sans' },
+                        bodyFont: { family: 'Work Sans' },
                         callbacks: {
                             afterBody: function(context) {
                                 const timeLimit = sortedTimes[context[0].dataIndex];
