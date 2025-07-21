@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZetaMath - Advanced Arithmetic Practice</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>ZetaMath</h1>
+            <p>Advanced Arithmetic Practice Game</p>
+        </header>
+
+        <!-- Main Menu -->
+        <div id="main-menu" class="screen active">
+            <div class="mode-selection">
+                <h2>Select Game Mode</h2>
+                <div class="modes">
+                    <button class="mode-btn" data-mode="easy">
+                        <h3>Easy</h3>
+                        <p>Addition/Subtraction: 2-60<br>
+                        Multiplication: (2-12) × (2-20)<br>
+                        Division: Reverse Multiplication</p>
+                    </button>
+                    <button class="mode-btn" data-mode="medium">
+                        <h3>Medium</h3>
+                        <p>Addition/Subtraction: 2-100<br>
+                        Multiplication: (2-12) × (2-100)<br>
+                        Division: Reverse Multiplication</p>
+                    </button>
+                    <button class="mode-btn" data-mode="hard">
+                        <h3>Hard</h3>
+                        <p>Addition/Subtraction: 2-300<br>
+                        Multiplication: (2-20) × (2-200)<br>
+                        Division: Reverse Multiplication</p>
+                    </button>
+                    <button class="mode-btn" data-mode="free">
+                        <h3>Free Mode</h3>
+                        <p>Customize your practice ranges<br>
+                        and operations</p>
+                    </button>
+                </div>
+            </div>
+
+            <div class="time-selection">
+                <h2>Select Time Limit</h2>
+                <div class="time-buttons">
+                    <button class="time-btn" data-time="15">15s</button>
+                    <button class="time-btn" data-time="20">20s</button>
+                    <button class="time-btn" data-time="30">30s</button>
+                    <button class="time-btn" data-time="60">60s</button>
+                    <button class="time-btn" data-time="120">2m</button>
+                    <button class="time-btn" data-time="300">5m</button>
+                    <button class="time-btn" data-time="600">10m</button>
+                </div>
+            </div>
+
+            <div class="navigation-buttons">
+                <button id="start-game-btn" disabled>Start Game</button>
+                <button id="view-progress-btn">View Progress</button>
+                <button id="practice-drill-btn">Recommended Practice</button>
+            </div>
+        </div>
+
+        <!-- Free Mode Configuration -->
+        <div id="free-mode-config" class="screen">
+            <h2>Configure Free Mode</h2>
+            <div class="config-section">
+                <h3>Operations</h3>
+                <div class="operation-checkboxes">
+                    <label><input type="checkbox" id="add-check" checked> Addition</label>
+                    <label><input type="checkbox" id="sub-check" checked> Subtraction</label>
+                    <label><input type="checkbox" id="mul-check" checked> Multiplication</label>
+                    <label><input type="checkbox" id="div-check" checked> Division</label>
+                </div>
+            </div>
+            
+            <div class="config-section">
+                <h3>Number Ranges</h3>
+                <div class="range-inputs">
+                    <div class="range-group">
+                        <label>Addition Range:</label>
+                        <input type="number" id="add-min" value="2" min="1"> to 
+                        <input type="number" id="add-max" value="100" min="2">
+                    </div>
+                    <div class="range-group">
+                        <label>Subtraction Range:</label>
+                        <input type="number" id="sub-min" value="2" min="1"> to 
+                        <input type="number" id="sub-max" value="100" min="2">
+                    </div>
+                    <div class="range-group">
+                        <label>Multiplication:</label>
+                        <input type="number" id="mul-min1" value="2" min="1"> to 
+                        <input type="number" id="mul-max1" value="12" min="2"> × 
+                        <input type="number" id="mul-min2" value="2" min="1"> to 
+                        <input type="number" id="mul-max2" value="100" min="2">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="navigation-buttons">
+                <button id="back-to-menu">Back</button>
+                <button id="start-free-game">Start Game</button>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="screen">
+            <div class="game-header">
+                <div class="timer">
+                    <span id="time-remaining">60</span>s
+                </div>
+                <div class="score">
+                    Score: <span id="current-score">0</span>
+                </div>
+                <div class="question-count">
+                    Question: <span id="question-number">1</span>
+                </div>
+            </div>
+            
+            <div class="question-area">
+                <div id="question-display">2 + 3 = ?</div>
+                <input type="number" id="answer-input" placeholder="Enter answer">
+                <button id="submit-answer">Submit</button>
+            </div>
+            
+            <div class="game-info">
+                <div id="feedback"></div>
+            </div>
+        </div>
+
+        <!-- Game Results -->
+        <div id="results-screen" class="screen">
+            <h2>Game Complete!</h2>
+            <div class="results-summary">
+                <div class="result-item">
+                    <span class="label">Final Score:</span>
+                    <span id="final-score">0</span>
+                </div>
+                <div class="result-item">
+                    <span class="label">Questions Answered:</span>
+                    <span id="total-questions">0</span>
+                </div>
+                <div class="result-item">
+                    <span class="label">Average Time per Question:</span>
+                    <span id="avg-time">0.0s</span>
+                </div>
+                <div class="result-item">
+                    <span class="label">Accuracy:</span>
+                    <span id="accuracy">0%</span>
+                </div>
+            </div>
+            
+            <div class="detailed-results">
+                <h3>Question Details</h3>
+                <div id="question-details"></div>
+            </div>
+            
+            <div class="navigation-buttons">
+                <button id="play-again">Play Again</button>
+                <button id="back-to-main">Main Menu</button>
+                <button id="view-detailed-progress">View Progress</button>
+            </div>
+        </div>
+
+        <!-- Progress Screen -->
+        <div id="progress-screen" class="screen">
+            <h2>Your Progress</h2>
+            <div class="progress-tabs">
+                <button class="tab-btn active" data-tab="overview">Overview</button>
+                <button class="tab-btn" data-tab="by-operation">By Operation</button>
+                <button class="tab-btn" data-tab="by-time">By Time Mode</button>
+            </div>
+            
+            <div class="progress-content">
+                <div id="overview-tab" class="tab-content active">
+                    <canvas id="overview-chart"></canvas>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <h4>Total Games</h4>
+                            <span id="total-games">0</span>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Best Score</h4>
+                            <span id="best-score">0</span>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Average Accuracy</h4>
+                            <span id="avg-accuracy">0%</span>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Fastest Answer</h4>
+                            <span id="fastest-answer">0.0s</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="by-operation-tab" class="tab-content">
+                    <canvas id="operation-chart"></canvas>
+                    <div id="operation-details"></div>
+                </div>
+                
+                <div id="by-time-tab" class="tab-content">
+                    <canvas id="time-chart"></canvas>
+                    <div id="time-details"></div>
+                </div>
+            </div>
+            
+            <div class="navigation-buttons">
+                <button id="back-from-progress">Back to Menu</button>
+            </div>
+        </div>
+
+        <!-- Practice Drill Screen -->
+        <div id="practice-drill-screen" class="screen">
+            <h2>Recommended Practice Drill</h2>
+            <div id="drill-description"></div>
+            <div class="drill-config">
+                <label>Practice Duration:</label>
+                <select id="drill-duration">
+                    <option value="30">30 seconds</option>
+                    <option value="60" selected>1 minute</option>
+                    <option value="120">2 minutes</option>
+                    <option value="300">5 minutes</option>
+                </select>
+            </div>
+            <div class="navigation-buttons">
+                <button id="start-drill">Start Practice Drill</button>
+                <button id="back-from-drill">Back to Menu</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
