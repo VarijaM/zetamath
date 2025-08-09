@@ -16,18 +16,25 @@ class InMemoryDBImp(InMemoryDB):
     def __init__(self) -> None:
         self._data: Dict[str, Dict[str, str]] = {}
 
+    def _ensure_data_initialized(self) -> None:
+        if not hasattr(self, "_data"):
+            self._data = {}
+
     def set(self, key: str, field: str, value: str) -> None:
+        self._ensure_data_initialized()
         if key not in self._data:
             self._data[key] = {}
         self._data[key][field] = value
 
     def get(self, key: str, field: str) -> Optional[str]:
+        self._ensure_data_initialized()
         record = self._data.get(key)
         if record is None:
             return None
         return record.get(field)
 
     def delete(self, key: str, field: str) -> bool:
+        self._ensure_data_initialized()
         record = self._data.get(key)
         if record is None or field not in record:
             return False
