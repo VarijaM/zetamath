@@ -12,6 +12,9 @@ class ZetaMathGame {
         this.questionStartTime = null;
         this.timeRemaining = 0;
         this.timer = null;
+        this.feedbackTimer = null;
+        this.endAt = null;
+        this.acceptingAnswers = false;
         this.gameData = [];
         this.currentSession = {
             mode: null,
@@ -21,23 +24,10 @@ class ZetaMathGame {
             endTime: null
         };
         
-        // Game mode configurations
         this.modes = {
-            easy: {
-                addition: { min: 2, max: 60 },
-                subtraction: { min: 2, max: 60 },
-                multiplication: { factor1: { min: 2, max: 12 }, factor2: { min: 2, max: 20 } }
-            },
-            medium: {
-                addition: { min: 2, max: 100 },
-                subtraction: { min: 2, max: 100 },
-                multiplication: { factor1: { min: 2, max: 12 }, factor2: { min: 2, max: 100 } }
-            },
-            hard: {
-                addition: { min: 2, max: 300 },
-                subtraction: { min: 2, max: 300 },
-                multiplication: { factor1: { min: 2, max: 20 }, factor2: { min: 2, max: 200 } }
-            },
+            easy: ZetaMathLogic.PRESET_MODES.easy,
+            medium: ZetaMathLogic.PRESET_MODES.medium,
+            hard: ZetaMathLogic.PRESET_MODES.hard,
             free: {
                 operations: ['addition', 'subtraction', 'multiplication', 'division'],
                 ranges: {}
@@ -73,6 +63,7 @@ class ZetaMathGame {
             if (e.key === 'Enter') this.submitAnswer();
         });
         document.getElementById('submit-answer').addEventListener('click', () => this.submitAnswer());
+        document.getElementById('end-round-btn').addEventListener('click', () => this.endGame());
         
         // Results screen
         document.getElementById('play-again').addEventListener('click', () => this.playAgain());
@@ -111,8 +102,9 @@ class ZetaMathGame {
     
     selectTime(time) {
         this.currentTimeLimit = time;
-        document.querySelectorAll('.time-btn').forEach(btn => btn.classList.remove('selected'));
-        document.querySelector(`[data-time="${time}"]`).classList.add('selected');
+        document.querySelectorAll('.time-btn').forEach(btn => {
+            btn.classList.toggle('selected', Number(btn.dataset.time) === time);
+        });
         this.checkStartGameButton();
     }
     
@@ -130,69 +122,70 @@ class ZetaMathGame {
         document.getElementById(screenId).classList.add('active');
     }
     
-    startGame() {
-        if (!this.currentMode || !this.currentTimeLimit) return;
+    startGame(options = {}) {
+        const roundTime = options.timeLimit ?? this.currentTimeLimit;
+        if (!this.currentMode || !roundTime) return false;
+
+        // A normal start passes no options, so a previous drill cannot leak in.
+        // Drills pass the mode, focus, and duration for this round only.
+        const flags = ZetaMathLogic.resolveStartOptions(options);
+        this.focusOperation = flags.focusOperation;
+        this.practiceMode = flags.practiceMode;
+        this.currentTimeLimit = roundTime;
         
         this.resetGame();
         this.currentSession = {
             mode: this.currentMode,
-            timeLimit: this.currentTimeLimit,
+            timeLimit: roundTime,
             questions: [],
             startTime: Date.now(),
             endTime: null
         };
         
-        // Reset focus operation and practice mode for regular games (not practice drills)
-        if (!this.focusOperation) {
-            this.focusOperation = null;
-        }
-        if (!this.practiceMode) {
-            this.practiceMode = null;
-        }
-        
         this.showScreen('game-screen');
         this.startTimer();
         this.generateNextQuestion();
         document.getElementById('answer-input').focus();
+        return true;
     }
     
+    readInput(id) {
+        return document.getElementById(id).value;
+    }
+
+    validateFreeConfig(config) {
+        return ZetaMathLogic.validateFreeConfig(config);
+    }
+
     startFreeGame() {
-        // Get free mode configuration
         const operations = [];
         if (document.getElementById('add-check').checked) operations.push('addition');
         if (document.getElementById('sub-check').checked) operations.push('subtraction');
         if (document.getElementById('mul-check').checked) operations.push('multiplication');
         if (document.getElementById('div-check').checked) operations.push('division');
-        
-        if (operations.length === 0) {
-            alert('Please select at least one operation!');
-            return;
-        }
-        
-        // Get ranges
-        this.modes.free.operations = operations;
-        this.modes.free.ranges = {
-            addition: {
-                min: parseInt(document.getElementById('add-min').value),
-                max: parseInt(document.getElementById('add-max').value)
-            },
-            subtraction: {
-                min: parseInt(document.getElementById('sub-min').value),
-                max: parseInt(document.getElementById('sub-max').value)
-            },
-            multiplication: {
-                factor1: {
-                    min: parseInt(document.getElementById('mul-min1').value),
-                    max: parseInt(document.getElementById('mul-max1').value)
-                },
-                factor2: {
-                    min: parseInt(document.getElementById('mul-min2').value),
-                    max: parseInt(document.getElementById('mul-max2').value)
+
+        const parsed = this.validateFreeConfig({
+            operations,
+            timeLimit: this.currentTimeLimit,
+            ranges: {
+                addition: { min: this.readInput('add-min'), max: this.readInput('add-max') },
+                subtraction: { min: this.readInput('sub-min'), max: this.readInput('sub-max') },
+                multiplication: {
+                    factor1: { min: this.readInput('mul-min1'), max: this.readInput('mul-max1') },
+                    factor2: { min: this.readInput('mul-min2'), max: this.readInput('mul-max2') }
                 }
             }
-        };
-        
+        });
+
+        if (!parsed.ok) {
+            alert(parsed.message);
+            return;
+        }
+
+        this.modes.free.operations = parsed.operations;
+        this.modes.free.ranges = parsed.ranges;
         this.currentMode = 'free';
+        this.currentTimeLimit = parsed.timeLimit;
         this.startGame();
     }
     
@@ -207,21 +200,56 @@ class ZetaMathGame {
         document.getElementById('question-number').textContent = '1';
         document.getElementById('time-remaining').textContent = this.timeRemaining;
         document.getElementById('feedback').textContent = '';
-        document.getElementById('answer-input').value = '';
+        document.getElementById('feedback').className = '';
+        const answerInput = document.getElementById('answer-input');
+        answerInput.value = '';
+        answerInput.disabled = false;
+        document.getElementById('submit-answer').disabled = false;
+        this.acceptingAnswers = true;
+        if (this.feedbackTimer) {
+            clearTimeout(this.feedbackTimer);
+            this.feedbackTimer = null;
+        }
+        document.querySelector('#game-screen .timer').classList.remove('low');
     }
     
+    clearTimer() {
+        if (this.timer) {
+            clearInterval(this.timer);
+            this.timer = null;
+        }
+    }
+
+    remainingSeconds(endAt, now) {
+        return ZetaMathLogic.remainingSeconds(endAt, now);
+    }
+
+    isLowTime(secondsRemaining) {
+        return ZetaMathLogic.isLowTime(secondsRemaining, this.currentTimeLimit);
+    }
+
+    updateTimerDisplay() {
+        document.getElementById('time-remaining').textContent = String(this.timeRemaining);
+        document.querySelector('#game-screen .timer').classList.toggle('low', this.isLowTime(this.timeRemaining));
+    }
+
     startTimer() {
-        this.timer = setInterval(() => {
-            this.timeRemaining--;
-            document.getElementById('time-remaining').textContent = this.timeRemaining;
-            
+        this.clearTimer();
+        this.endAt = Date.now() + this.currentTimeLimit * 1000;
+        const tick = () => {
+            if (!this.gameActive) return;
+            this.timeRemaining = this.remainingSeconds(this.endAt, Date.now());
+            this.updateTimerDisplay();
             if (this.timeRemaining <= 0) {
                 this.endGame();
             }
-        }, 1000);
+        };
+        tick();
+        this.timer = setInterval(tick, 200);
     }
     
     generateNextQuestion() {
+        if (!this.gameActive) return;
         this.questionStartTime = Date.now();
         
         // Check if we're in wrong questions practice mode
@@ -234,76 +262,107 @@ class ZetaMathGame {
         this.generateRegularQuestion();
     }
     
+    parseNumericAnswer(raw) {
+        return ZetaMathLogic.parseNumericAnswer(raw);
+    }
+
+    setAnsweringEnabled(enabled) {
+        this.acceptingAnswers = enabled;
+        document.getElementById('answer-input').disabled = !enabled;
+        document.getElementById('submit-answer').disabled = !enabled;
+    }
+
     submitAnswer() {
-        if (!this.gameActive) return;
-        
-        const userAnswer = parseInt(document.getElementById('answer-input').value);
+        if (!this.gameActive || !this.acceptingAnswers || !this.currentQuestion) return;
+
+        const userAnswer = this.parseNumericAnswer(document.getElementById('answer-input').value);
+        if (userAnswer === null) {
+            const feedback = document.getElementById('feedback');
+            feedback.textContent = 'Enter a whole number';
+            feedback.className = 'feedback-incorrect';
+            return;
+        }
+
+        this.setAnsweringEnabled(false);
         const correctAnswer = this.currentQuestion.answer;
         const timeSpent = (Date.now() - this.questionStartTime) / 1000;
-        
+        const correct = userAnswer === correctAnswer;
+
         const questionData = {
             ...this.currentQuestion,
             userAnswer,
             timeSpent,
-            correct: userAnswer === correctAnswer,
+            correct,
             questionNumber: this.questionNumber
         };
         
         this.gameData.push(questionData);
         this.currentSession.questions.push(questionData);
+        this.recordAnswerForPractice(questionData, correct);
         
-        // Store wrong questions for practice
-        if (!questionData.correct) {
-            this.saveWrongQuestion(questionData);
-        }
-        
-        if (userAnswer === correctAnswer) {
+        const feedback = document.getElementById('feedback');
+        if (correct) {
             this.score++;
             document.getElementById('current-score').textContent = this.score;
-            document.getElementById('feedback').textContent = 'Correct!';
-            document.getElementById('feedback').className = 'feedback-correct';
+            feedback.textContent = 'Correct!';
+            feedback.className = 'feedback-correct';
             document.getElementById('question-display').classList.add('pulse');
-            
-            // Immediately move to next question
-            setTimeout(() => {
-                document.getElementById('question-display').classList.remove('pulse');
-                this.questionNumber++;
-                document.getElementById('question-number').textContent = this.questionNumber;
-                this.generateNextQuestion();
-                document.getElementById('feedback').textContent = '';
-            }, 200);
-            
+            this.scheduleAdvance(200);
         } else {
-            document.getElementById('feedback').textContent = `Incorrect! Answer was ${correctAnswer}`;
-            document.getElementById('feedback').className = 'feedback-incorrect';
+            feedback.textContent = `Incorrect! Answer was ${correctAnswer}`;
+            feedback.className = 'feedback-incorrect';
             document.getElementById('answer-input').classList.add('shake');
-            
-            setTimeout(() => {
-                document.getElementById('answer-input').classList.remove('shake');
-                this.questionNumber++;
-                document.getElementById('question-number').textContent = this.questionNumber;
-                this.generateNextQuestion();
-                document.getElementById('feedback').textContent = '';
-            }, 1000);
+            this.scheduleAdvance(1000);
         }
+    }
+
+    scheduleAdvance(delay) {
+        if (this.feedbackTimer) clearTimeout(this.feedbackTimer);
+        this.feedbackTimer = setTimeout(() => {
+            this.feedbackTimer = null;
+            if (!this.gameActive) return;
+            document.getElementById('question-display').classList.remove('pulse');
+            document.getElementById('answer-input').classList.remove('shake');
+            this.setAnsweringEnabled(true);
+            this.questionNumber++;
+            document.getElementById('question-number').textContent = this.questionNumber;
+            document.getElementById('feedback').textContent = '';
+            document.getElementById('feedback').className = '';
+            this.generateNextQuestion();
+        }, delay);
     }
     
     endGame() {
+        if (!this.gameActive) return;
         this.gameActive = false;
-        clearInterval(this.timer);
+        this.acceptingAnswers = false;
+        this.clearTimer();
+        if (this.feedbackTimer) {
+            clearTimeout(this.feedbackTimer);
+            this.feedbackTimer = null;
+        }
+        const timerBox = document.querySelector('#game-screen .timer');
+        if (timerBox) timerBox.classList.remove('low');
         this.currentSession.endTime = Date.now();
         
         this.saveGameSession();
         this.showGameResults();
+        this.restoreMenuSelection();
         this.showScreen('results-screen');
+    }
+
+    restoreMenuSelection() {
+        if (!this.menuSnapshot) return;
+        this.currentMode = this.menuSnapshot.mode;
+        this.currentTimeLimit = this.menuSnapshot.timeLimit;
+        this.menuSnapshot = null;
     }
     
     showGameResults() {
-        const totalQuestions = this.gameData.length;
-        const correctAnswers = this.gameData.filter(q => q.correct).length;
-        const accuracy = totalQuestions > 0 ? Math.round((correctAnswers / totalQuestions) * 100) : 0;
-        const totalTime = this.gameData.reduce((sum, q) => sum + q.timeSpent, 0);
-        const avgTime = totalQuestions > 0 ? (totalTime / totalQuestions).toFixed(1) : '0.0';
+        const stats = ZetaMathLogic.sessionStats(this.gameData);
+        const totalQuestions = stats.total;
+        const accuracy = stats.accuracy;
+        const avgTime = totalQuestions > 0 ? stats.avgTime.toFixed(1) : '0.0';
         
         document.getElementById('final-score').textContent = this.score;
         document.getElementById('total-questions').textContent = totalQuestions;
@@ -319,7 +378,7 @@ class ZetaMathGame {
             div.className = 'question-detail';
             div.innerHTML = `
                 <span>Q${index + 1}: ${question.display.replace(' = ?', '')} = ${question.answer}</span>
-                <span>Your: ${question.userAnswer || 'No answer'}</span>
+                <span>Your: ${question.userAnswer}</span>
                 <span style="color: ${question.correct ? '#38a169' : '#e53e3e'}">${question.timeSpent.toFixed(1)}s</span>
             `;
             detailsContainer.appendChild(div);
@@ -331,20 +390,16 @@ class ZetaMathGame {
     }
     
     saveGameSession() {
-        let gameHistory = JSON.parse(localStorage.getItem('zetamath_history') || '[]');
+        const gameHistory = this.loadProgress();
         gameHistory.push(this.currentSession);
-        
-        // Keep only last 100 sessions to prevent storage overflow
-        if (gameHistory.length > 100) {
-            gameHistory = gameHistory.slice(-100);
-        }
-        
-        localStorage.setItem('zetamath_history', JSON.stringify(gameHistory));
+        localStorage.setItem(
+            'zetamath_history',
+            JSON.stringify(ZetaMathLogic.capList(gameHistory, ZetaMathLogic.HISTORY_LIMIT))
+        );
     }
     
     loadProgress() {
-        const history = JSON.parse(localStorage.getItem('zetamath_history') || '[]');
-        return history;
+        return ZetaMathLogic.safeParseJSON(localStorage.getItem('zetamath_history'), []);
     }
     
     showProgress() {
@@ -359,39 +414,21 @@ class ZetaMathGame {
             this.showNoDataMessage();
             return;
         }
-        
-        // Calculate overall stats
-        const totalGames = history.length;
-        let bestScore = 0;
-        let totalAccuracy = 0;
-        let fastestAnswer = Infinity;
-        
-        history.forEach(session => {
-            const correctAnswers = session.questions.filter(q => q.correct).length;
-            bestScore = Math.max(bestScore, correctAnswers);
-            
-            const sessionAccuracy = session.questions.length > 0 ? 
-                (correctAnswers / session.questions.length) * 100 : 0;
-            totalAccuracy += sessionAccuracy;
-            
-            session.questions.forEach(q => {
-                if (q.correct && q.timeSpent < fastestAnswer) {
-                    fastestAnswer = q.timeSpent;
-                }
-            });
-        });
-        
-        const avgAccuracy = Math.round(totalAccuracy / totalGames);
-        
-        document.getElementById('total-games').textContent = totalGames;
-        document.getElementById('best-score').textContent = bestScore;
-        document.getElementById('avg-accuracy').textContent = `${avgAccuracy}%`;
-        document.getElementById('fastest-answer').textContent = 
-            fastestAnswer === Infinity ? 'N/A' : `${fastestAnswer.toFixed(1)}s`;
+
+        this.showProgressCharts();
+        const summary = ZetaMathLogic.progressSummary(history);
+        document.getElementById('total-games').textContent = summary.totalGames;
+        document.getElementById('best-score').textContent = summary.bestScore;
+        document.getElementById('avg-accuracy').textContent = `${summary.avgAccuracy}%`;
+        document.getElementById('fastest-answer').textContent = summary.fastestAnswer === null
+            ? 'N/A'
+            : `${summary.fastestAnswer.toFixed(1)}s`;
         
         this.createOverviewChart(history);
         this.createOperationChart(history);
         this.createTimeChart(history);
+        this.renderOperationDetails(ZetaMathLogic.summarizeOperations(history));
+        this.renderTimeDetails(ZetaMathLogic.timeModeSummary(history));
     }
     
     createOverviewChart(history) {
@@ -402,16 +439,10 @@ class ZetaMathGame {
             window.overviewChart.destroy();
         }
         
-        const last10Sessions = history.slice(-10);
-        const labels = last10Sessions.map((_, index) => `Game ${index + 1}`);
-        const scores = last10Sessions.map(session => 
-            session.questions.filter(q => q.correct).length
-        );
-        const accuracies = last10Sessions.map(session => {
-            const total = session.questions.length;
-            const correct = session.questions.filter(q => q.correct).length;
-            return total > 0 ? Math.round((correct / total) * 100) : 0;
-        });
+        const series = ZetaMathLogic.overviewSeries(history);
+        const labels = series.map(point => point.label);
+        const scores = series.map(point => point.score);
+        const accuracies = series.map(point => point.accuracy);
         
         window.overviewChart = new Chart(ctx, {
             type: 'line',
@@ -494,27 +525,13 @@ class ZetaMathGame {
             window.operationAccuracyChart.destroy();
         }
         
-        const operationStats = {
-            addition: { total: 0, correct: 0, totalTime: 0 },
-            subtraction: { total: 0, correct: 0, totalTime: 0 },
-            multiplication: { total: 0, correct: 0, totalTime: 0 },
-            division: { total: 0, correct: 0, totalTime: 0 }
-        };
-        
-        history.forEach(session => {
-            session.questions.forEach(q => {
-                const op = q.operation;
-                operationStats[op].total++;
-                if (q.correct) operationStats[op].correct++;
-                operationStats[op].totalTime += q.timeSpent;
-            });
-        });
+        const operationStats = ZetaMathLogic.summarizeOperations(history);
         
         const labels = Object.keys(operationStats).map(op => 
             op.charAt(0).toUpperCase() + op.slice(1)
         );
         const accuracies = Object.values(operationStats).map(stat => 
-            stat.total > 0 ? Math.round((stat.correct / stat.total) * 100) : 0
+            stat.total > 0 ? Math.round((stat.correct / stat.total) * 100) : null
         );
         
         window.operationAccuracyChart = new Chart(ctx, {
@@ -596,27 +613,13 @@ class ZetaMathGame {
             window.operationTimeChart.destroy();
         }
         
-        const operationStats = {
-            addition: { total: 0, correct: 0, totalTime: 0 },
-            subtraction: { total: 0, correct: 0, totalTime: 0 },
-            multiplication: { total: 0, correct: 0, totalTime: 0 },
-            division: { total: 0, correct: 0, totalTime: 0 }
-        };
-        
-        history.forEach(session => {
-            session.questions.forEach(q => {
-                const op = q.operation;
-                operationStats[op].total++;
-                if (q.correct) operationStats[op].correct++;
-                operationStats[op].totalTime += q.timeSpent;
-            });
-        });
+        const operationStats = ZetaMathLogic.summarizeOperations(history);
         
         const labels = Object.keys(operationStats).map(op => 
             op.charAt(0).toUpperCase() + op.slice(1)
         );
         const avgTimes = Object.values(operationStats).map(stat => 
-            stat.total > 0 ? (stat.totalTime / stat.total).toFixed(1) : 0
+            stat.total > 0 ? Math.round((stat.totalTime / stat.total) * 10) / 10 : null
         );
         
         window.operationTimeChart = new Chart(ctx, {
@@ -697,42 +700,10 @@ class ZetaMathGame {
             window.timeChart.destroy();
         }
         
-        const timeStats = {};
-        
-        history.forEach(session => {
-            const timeLimit = session.timeLimit;
-            if (!timeStats[timeLimit]) {
-                timeStats[timeLimit] = { 
-                    total: 0, 
-                    correct: 0, 
-                    totalQuestions: 0,
-                    sessions: 0,
-                    bestScore: 0
-                };
-            }
-            const correctAnswers = session.questions.filter(q => q.correct).length;
-            timeStats[timeLimit].total += session.questions.length;
-            timeStats[timeLimit].correct += correctAnswers;
-            timeStats[timeLimit].totalQuestions += session.questions.length;
-            timeStats[timeLimit].sessions++;
-            timeStats[timeLimit].bestScore = Math.max(timeStats[timeLimit].bestScore, correctAnswers);
-        });
-        
-        const sortedTimes = Object.keys(timeStats).sort((a, b) => a - b);
-        const labels = sortedTimes.map(time => {
-            const t = parseInt(time);
-            return t >= 60 ? `${Math.floor(t/60)}m` : `${t}s`;
-        });
-        
-        const accuracies = sortedTimes.map(time => {
-            const stat = timeStats[time];
-            return stat.total > 0 ? Math.round((stat.correct / stat.total) * 100) : 0;
-        });
-        
-        const avgScores = sortedTimes.map(time => {
-            const stat = timeStats[time];
-            return stat.sessions > 0 ? Math.round(stat.correct / stat.sessions) : 0;
-        });
+        const rows = ZetaMathLogic.timeModeSummary(history);
+        const labels = rows.map(row => row.label);
+        const accuracies = rows.map(row => row.accuracy);
+        const avgScores = rows.map(row => row.avgScore);
         
         window.timeChart = new Chart(ctx, {
             type: 'bar',
@@ -790,12 +761,11 @@ class ZetaMathGame {
                         bodyFont: { family: 'Work Sans' },
                         callbacks: {
                             afterBody: function(context) {
-                                const timeLimit = sortedTimes[context[0].dataIndex];
-                                const stat = timeStats[timeLimit];
+                                const row = rows[context[0].dataIndex];
                                 return [
-                                    `Sessions played: ${stat.sessions}`,
-                                    `Best score: ${stat.bestScore}`,
-                                    `Total questions: ${stat.totalQuestions}`
+                                    `Sessions played: ${row.sessions}`,
+                                    `Best score: ${row.bestScore}`,
+                                    `Total questions: ${row.totalQuestions}`
                                 ];
                             }
                         }
@@ -805,9 +775,75 @@ class ZetaMathGame {
         });
     }
     
+    chartCanvasIds() {
+        return ['overview-chart', 'operation-accuracy-chart', 'operation-time-chart', 'time-chart'];
+    }
+
+    destroyCharts() {
+        ['overviewChart', 'operationAccuracyChart', 'operationTimeChart', 'timeChart'].forEach(name => {
+            if (window[name]) {
+                window[name].destroy();
+                window[name] = null;
+            }
+        });
+    }
+
     showNoDataMessage() {
-        document.getElementById('overview-chart').style.display = 'none';
-        // Add no data message
+        this.destroyCharts();
+        this.chartCanvasIds().forEach(id => {
+            document.getElementById(id).style.display = 'none';
+        });
+        document.getElementById('no-progress-message').hidden = false;
+        document.getElementById('total-games').textContent = '0';
+        document.getElementById('best-score').textContent = '0';
+        document.getElementById('avg-accuracy').textContent = '0%';
+        document.getElementById('fastest-answer').textContent = 'N/A';
+        document.getElementById('operation-details').replaceChildren();
+        document.getElementById('time-details').replaceChildren();
+    }
+
+    showProgressCharts() {
+        document.getElementById('no-progress-message').hidden = true;
+        this.chartCanvasIds().forEach(id => {
+            document.getElementById(id).style.display = '';
+        });
+    }
+
+    renderOperationDetails(stats) {
+        const container = document.getElementById('operation-details');
+        container.replaceChildren();
+        Object.keys(stats).forEach(operation => {
+            const stat = stats[operation];
+            const row = document.createElement('div');
+            row.className = 'detail-row';
+            const name = document.createElement('strong');
+            name.textContent = operation.charAt(0).toUpperCase() + operation.slice(1);
+            const text = document.createElement('span');
+            if (stat.total === 0) {
+                text.textContent = 'Not practiced yet';
+            } else {
+                const accuracy = Math.round((stat.correct / stat.total) * 100);
+                const average = (stat.totalTime / stat.total).toFixed(1);
+                text.textContent = `${accuracy}% accuracy, ${average}s average, ${stat.correct}/${stat.total} correct`;
+            }
+            row.append(name, text);
+            container.append(row);
+        });
+    }
+
+    renderTimeDetails(rows) {
+        const container = document.getElementById('time-details');
+        container.replaceChildren();
+        rows.forEach(row => {
+            const line = document.createElement('div');
+            line.className = 'detail-row';
+            const name = document.createElement('strong');
+            name.textContent = row.label;
+            const text = document.createElement('span');
+            text.textContent = `${row.sessions} sessions, average score ${row.avgScore}, ${row.accuracy}% accuracy, best ${row.bestScore}`;
+            line.append(name, text);
+            container.append(line);
+        });
     }
     
     switchTab(tabName) {
@@ -820,13 +856,14 @@ class ZetaMathGame {
     
     selectPracticeTime(time) {
         this.currentPracticeTimeLimit = time;
-        document.querySelectorAll('.practice-time-btn').forEach(btn => btn.classList.remove('selected'));
-        document.querySelector(`[data-time="${time}"]`).classList.add('selected');
+        document.querySelectorAll('.practice-time-btn').forEach(btn => {
+            btn.classList.toggle('selected', Number(btn.dataset.time) === time);
+        });
     }
     
     showPracticeDrill() {
-        const recommendation = this.generateRecommendation();
-        document.getElementById('drill-description').innerHTML = recommendation.description;
+        const recommendation = ZetaMathLogic.recommendPractice(this.loadProgress());
+        this.renderRecommendation(recommendation);
         this.currentDrillConfig = recommendation.config;
         
         // Set default practice time if not set
@@ -834,12 +871,12 @@ class ZetaMathGame {
             this.currentPracticeTimeLimit = 60; // Default to 60 seconds
         }
         
-        // Update practice time button selection
-        document.querySelectorAll('.practice-time-btn').forEach(btn => btn.classList.remove('selected'));
-        const defaultBtn = document.querySelector(`[data-time="${this.currentPracticeTimeLimit}"]`);
-        if (defaultBtn) {
-            defaultBtn.classList.add('selected');
-        }
+        // Update practice time button selection only. Main-menu time buttons
+        // share the same data-time values, so a document-wide query would
+        // highlight those instead.
+        document.querySelectorAll('.practice-time-btn').forEach(btn => {
+            btn.classList.toggle('selected', Number(btn.dataset.time) === this.currentPracticeTimeLimit);
+        });
         
         // Update wrong questions info
         const wrongQuestions = this.getWrongQuestions();
@@ -861,107 +898,17 @@ class ZetaMathGame {
         this.showScreen('practice-drill-screen');
     }
     
-    generateRecommendation() {
-        const history = this.loadProgress();
-        
-        if (history.length === 0) {
-            return {
-                description: `<h3>Welcome to ZetaMath!</h3>
-                <p>Since you're just starting out, I recommend beginning with <strong>Easy mode</strong> for 60 seconds to get familiar with the game mechanics.</p>
-                <p>This will help establish a baseline for your arithmetic skills across all operations.</p>`,
-                config: { mode: 'easy', focus: 'all' }
-            };
-        }
-        
-        // Analyze performance data
-        const operationStats = {
-            addition: { total: 0, correct: 0, totalTime: 0 },
-            subtraction: { total: 0, correct: 0, totalTime: 0 },
-            multiplication: { total: 0, correct: 0, totalTime: 0 },
-            division: { total: 0, correct: 0, totalTime: 0 }
-        };
-        
-        history.forEach(session => {
-            session.questions.forEach(q => {
-                const op = q.operation;
-                operationStats[op].total++;
-                if (q.correct) operationStats[op].correct++;
-                operationStats[op].totalTime += q.timeSpent;
-            });
+    renderRecommendation(recommendation) {
+        const description = document.getElementById('drill-description');
+        description.replaceChildren();
+        const title = document.createElement('h3');
+        title.textContent = recommendation.title;
+        description.append(title);
+        recommendation.paragraphs.forEach(text => {
+            const paragraph = document.createElement('p');
+            paragraph.textContent = text;
+            description.append(paragraph);
         });
-        
-        // Find weakest areas
-        let weakestOperation = null;
-        let lowestAccuracy = 100;
-        let slowestOperation = null;
-        let slowestTime = 0;
-        
-        Object.keys(operationStats).forEach(op => {
-            const stat = operationStats[op];
-            if (stat.total > 0) {
-                const accuracy = (stat.correct / stat.total) * 100;
-                const avgTime = stat.totalTime / stat.total;
-                
-                if (accuracy < lowestAccuracy) {
-                    lowestAccuracy = accuracy;
-                    weakestOperation = op;
-                }
-                
-                if (avgTime > slowestTime) {
-                    slowestTime = avgTime;
-                    slowestOperation = op;
-                }
-            }
-        });
-        
-        // Generate recommendation
-        let recommendation = '';
-        let focusOperation = 'all';
-        
-        if (weakestOperation && lowestAccuracy < 80) {
-            recommendation = `<h3>Accuracy Focus Recommended</h3>
-            <p>Your <strong>${weakestOperation}</strong> accuracy is ${Math.round(lowestAccuracy)}%, which could use improvement.</p>
-            <p>I recommend focused practice on ${weakestOperation} problems to build confidence and accuracy.</p>`;
-            focusOperation = weakestOperation;
-        } else if (slowestOperation && slowestTime > 3) {
-            recommendation = `<h3>Speed Training Recommended</h3>
-            <p>Your <strong>${slowestOperation}</strong> average time is ${slowestTime.toFixed(1)}s, which is slower than optimal.</p>
-            <p>Let's work on speed drills for ${slowestOperation} to improve your reaction time.</p>`;
-            focusOperation = slowestOperation;
-        } else {
-            recommendation = `<h3>Well-Rounded Practice</h3>
-            <p>Great job! Your performance is solid across all operations.</p>
-            <p>I recommend mixed practice to maintain your skills and continue improving overall speed.</p>`;
-        }
-        
-        return {
-            description: recommendation,
-            config: { 
-                mode: this.getRecommendedMode(history), 
-                focus: focusOperation 
-            }
-        };
-    }
-    
-    getRecommendedMode(history) {
-        // Analyze recent performance to suggest appropriate difficulty
-        const recentSessions = history.slice(-5);
-        let totalAccuracy = 0;
-        let sessionCount = 0;
-        
-        recentSessions.forEach(session => {
-            if (session.questions.length > 0) {
-                const correct = session.questions.filter(q => q.correct).length;
-                totalAccuracy += (correct / session.questions.length) * 100;
-                sessionCount++;
-            }
-        });
-        
-        const avgAccuracy = sessionCount > 0 ? totalAccuracy / sessionCount : 70;
-        
-        if (avgAccuracy >= 90) return 'hard';
-        if (avgAccuracy >= 75) return 'medium';
-        return 'easy';
     }
     
     startAIPracticeDrill() {
@@ -970,20 +917,21 @@ class ZetaMathGame {
             return;
         }
         
-        // Set up drill based on AI recommendation
+        // Keep the main-menu choice. The drill's mode and duration apply to this round only.
+        const previous = { mode: this.currentMode, timeLimit: this.currentTimeLimit };
         this.currentMode = this.currentDrillConfig.mode;
-        this.currentTimeLimit = this.currentPracticeTimeLimit;
-        this.practiceMode = 'ai-recommendation';
-        
-        // If focusing on specific operation, set focus
-        if (this.currentDrillConfig.focus !== 'all') {
-            this.focusOperation = this.currentDrillConfig.focus;
-            console.log(`Starting AI practice drill focused on: ${this.focusOperation}`);
-        } else {
-            this.focusOperation = null;
+        const focus = this.currentDrillConfig.focus !== 'all' ? this.currentDrillConfig.focus : null;
+        const started = this.startGame({
+            practiceMode: 'recommended',
+            focusOperation: focus,
+            timeLimit: this.currentPracticeTimeLimit
+        });
+        if (!started) {
+            this.currentMode = previous.mode;
+            this.currentTimeLimit = previous.timeLimit;
+            return;
         }
-        
-        this.startGame();
+        this.menuSnapshot = previous;
     }
     
     startWrongQuestionsDrill() {
@@ -998,14 +946,18 @@ class ZetaMathGame {
             return;
         }
         
-        // Set up drill for wrong questions
-        this.currentMode = 'medium'; // Default difficulty for wrong questions
-        this.currentTimeLimit = this.currentPracticeTimeLimit;
-        this.practiceMode = 'wrong-questions';
-        this.focusOperation = null;
-        
-        console.log(`Starting wrong questions drill with ${wrongQuestions.length} questions`);
-        this.startGame();
+        const previous = { mode: this.currentMode, timeLimit: this.currentTimeLimit };
+        this.currentMode = 'medium';
+        const started = this.startGame({
+            practiceMode: 'wrong-questions',
+            timeLimit: this.currentPracticeTimeLimit
+        });
+        if (!started) {
+            this.currentMode = previous.mode;
+            this.currentTimeLimit = previous.timeLimit;
+            return;
+        }
+        this.menuSnapshot = previous;
     }
     
     clearWrongQuestionsConfirm() {
@@ -1022,28 +974,28 @@ class ZetaMathGame {
         }
     }
     
-    saveWrongQuestion(questionData) {
-        let wrongQuestions = JSON.parse(localStorage.getItem('zetamath_wrong_questions') || '[]');
-        
-        // Add the wrong question with timestamp
-        const wrongQuestion = {
-            ...questionData,
-            timestamp: Date.now(),
-            practiceCount: 0
-        };
-        
-        wrongQuestions.push(wrongQuestion);
-        
-        // Keep only last 50 wrong questions to prevent storage overflow
-        if (wrongQuestions.length > 50) {
-            wrongQuestions = wrongQuestions.slice(-50);
-        }
-        
-        localStorage.setItem('zetamath_wrong_questions', JSON.stringify(wrongQuestions));
+    rememberWrongQuestion(list, question, now) {
+        return ZetaMathLogic.rememberWrongQuestion(list, question, now);
     }
-    
+
+    applyPracticeResult(list, question, correct, now) {
+        return ZetaMathLogic.applyPracticeResult(list, question, correct, now);
+    }
+
+    pickPracticeQuestion(list) {
+        return ZetaMathLogic.pickPracticeQuestion(list);
+    }
+
+    recordAnswerForPractice(questionData, correct) {
+        const list = this.getWrongQuestions();
+        const next = this.practiceMode === 'wrong-questions'
+            ? this.applyPracticeResult(list, questionData, correct)
+            : (correct ? list : this.rememberWrongQuestion(list, questionData));
+        localStorage.setItem('zetamath_wrong_questions', JSON.stringify(next));
+    }
+
     getWrongQuestions() {
-        return JSON.parse(localStorage.getItem('zetamath_wrong_questions') || '[]');
+        return ZetaMathLogic.safeParseJSON(localStorage.getItem('zetamath_wrong_questions'), []);
     }
     
     clearWrongQuestions() {
@@ -1051,38 +1003,20 @@ class ZetaMathGame {
     }
     
     generateWrongQuestionForPractice() {
-        const wrongQuestions = this.getWrongQuestions();
+        const selectedQuestion = this.pickPracticeQuestion(this.getWrongQuestions());
         
-        if (wrongQuestions.length === 0) {
-            // Fallback to regular question generation
+        if (!selectedQuestion) {
             return this.generateRegularQuestion();
         }
         
-        // Sort by practice count (least practiced first) and recent timestamp
-        wrongQuestions.sort((a, b) => {
-            if (a.practiceCount !== b.practiceCount) {
-                return a.practiceCount - b.practiceCount;
-            }
-            return b.timestamp - a.timestamp;
-        });
-        
-        // Pick from the least practiced questions
-        const selectedQuestion = wrongQuestions[0];
-        
-        // Create a new question based on the wrong one
         this.currentQuestion = {
             operation: selectedQuestion.operation,
             num1: selectedQuestion.num1,
             num2: selectedQuestion.num2,
             answer: selectedQuestion.answer,
             display: selectedQuestion.display,
-            isFromWrongQuestions: true,
-            originalQuestionId: selectedQuestion.timestamp
+            isFromWrongQuestions: true
         };
-        
-        // Increment practice count
-        selectedQuestion.practiceCount++;
-        localStorage.setItem('zetamath_wrong_questions', JSON.stringify(wrongQuestions));
         
         document.getElementById('question-display').textContent = this.currentQuestion.display;
         document.getElementById('answer-input').value = '';
@@ -1090,82 +1024,14 @@ class ZetaMathGame {
     }
     
     generateRegularQuestion() {
-        const mode = this.currentMode;
-        let operation, num1, num2, answer;
-        
-        // Check if we're in a focused practice drill
-        if (this.focusOperation && this.focusOperation !== 'all') {
-            operation = this.focusOperation;
-        } else if (mode === 'free') {
-            const operations = this.modes.free.operations;
-            operation = operations[Math.floor(Math.random() * operations.length)];
-        } else if (mode === 'custom') {
-            // Custom mode for practice drills with specific focus
-            operation = this.focusOperation || 'addition';
-        } else {
-            const operations = ['addition', 'subtraction', 'multiplication', 'division'];
-            operation = operations[Math.floor(Math.random() * operations.length)];
-        }
-        
-        switch (operation) {
-            case 'addition':
-                const addRange = mode === 'free' ? this.modes.free.ranges.addition : this.modes[mode].addition;
-                num1 = this.randomBetween(addRange.min, addRange.max);
-                num2 = this.randomBetween(addRange.min, addRange.max);
-                answer = num1 + num2;
-                this.currentQuestion = {
-                    operation: 'addition',
-                    num1, num2, answer,
-                    display: `${num1} + ${num2} = ?`
-                };
-                break;
-                
-            case 'subtraction':
-                const subRange = mode === 'free' ? this.modes.free.ranges.subtraction : this.modes[mode].subtraction;
-                num1 = this.randomBetween(subRange.min, subRange.max);
-                num2 = this.randomBetween(subRange.min, Math.min(num1, subRange.max));
-                answer = num1 - num2;
-                this.currentQuestion = {
-                    operation: 'subtraction',
-                    num1, num2, answer,
-                    display: `${num1} - ${num2} = ?`
-                };
-                break;
-                
-            case 'multiplication':
-                const mulRange = mode === 'free' ? this.modes.free.ranges.multiplication : this.modes[mode].multiplication;
-                num1 = this.randomBetween(mulRange.factor1.min, mulRange.factor1.max);
-                num2 = this.randomBetween(mulRange.factor2.min, mulRange.factor2.max);
-                answer = num1 * num2;
-                this.currentQuestion = {
-                    operation: 'multiplication',
-                    num1, num2, answer,
-                    display: `${num1} × ${num2} = ?`
-                };
-                break;
-                
-            case 'division':
-                // Reverse multiplication for division
-                const divRange = mode === 'free' ? this.modes.free.ranges.multiplication : this.modes[mode].multiplication;
-                const factor1 = this.randomBetween(divRange.factor1.min, divRange.factor1.max);
-                const factor2 = this.randomBetween(divRange.factor2.min, divRange.factor2.max);
-                const product = factor1 * factor2;
-                answer = factor1;
-                this.currentQuestion = {
-                    operation: 'division',
-                    num1: product, num2: factor2, answer,
-                    display: `${product} ÷ ${factor2} = ?`
-                };
-                break;
-        }
-        
+        this.currentQuestion = ZetaMathLogic.generateQuestion({
+            mode: this.currentMode,
+            modes: this.modes,
+            focusOperation: this.focusOperation
+        });
         document.getElementById('question-display').textContent = this.currentQuestion.display;
         document.getElementById('answer-input').value = '';
         document.getElementById('answer-input').focus();
-    }
-    
-    randomBetween(min, max) {
-        return Math.floor(Math.random() * (max - min + 1)) + min;
     }
 }
 

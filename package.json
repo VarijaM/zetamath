@@ -1,0 +1,14 @@
+{
+  "name": "zetamath",
+  "private": true,
+  "description": "Browser arithmetic practice game. Open index.html to play. npm is only for tests and lint.",
+  "scripts": {
+    "test": "node --test",
+    "lint": "eslint logic.js script.js test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.11.0",
+    "globals": "^17.12.0"
+  }
+}

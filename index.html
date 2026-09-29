@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -83,6 +83,19 @@
             </div>
             
             <div class="config-section">
+                <h3>Time Limit</h3>
+                <div class="time-buttons">
+                    <button type="button" class="time-btn" data-time="15">15s</button>
+                    <button type="button" class="time-btn" data-time="20">20s</button>
+                    <button type="button" class="time-btn" data-time="30">30s</button>
+                    <button type="button" class="time-btn" data-time="60">60s</button>
+                    <button type="button" class="time-btn" data-time="120">2m</button>
+                    <button type="button" class="time-btn" data-time="300">5m</button>
+                    <button type="button" class="time-btn" data-time="600">10m</button>
+                </div>
+            </div>
+
+            <div class="config-section">
                 <h3>Number Ranges</h3>
                 <div class="range-inputs">
                     <div class="range-group">
@@ -123,6 +136,7 @@
                 <div class="question-count">
                     Question: <span id="question-number">1</span>
                 </div>
+                <button type="button" id="end-round-btn" class="secondary-btn">End round</button>
             </div>
             
             <div class="question-area">
@@ -173,6 +187,7 @@
         <!-- Progress Screen -->
         <div id="progress-screen" class="screen">
             <h2>Your Progress</h2>
+            <p id="no-progress-message" class="empty-message" hidden>No games yet. Finish a round and your charts will show up here.</p>
             <div class="progress-tabs">
                 <button class="tab-btn active" data-tab="overview">Overview</button>
                 <button class="tab-btn" data-tab="by-operation">By Operation</button>
@@ -227,9 +242,9 @@
             
             <div class="practice-options">
                 <div class="practice-option-card" id="ai-recommendation-card">
-                    <h3>🎯 AI Recommended Practice</h3>
+                    <h3>Recommended practice</h3>
                     <div id="drill-description"></div>
-                    <button id="start-ai-drill">Start AI Recommended Drill</button>
+                    <button id="start-ai-drill">Start recommended drill</button>
                 </div>
                 
                 <div class="practice-option-card" id="wrong-questions-card">
@@ -249,7 +264,7 @@
                     <button class="practice-time-btn" data-time="15">15s</button>
                     <button class="practice-time-btn" data-time="20">20s</button>
                     <button class="practice-time-btn" data-time="30">30s</button>
-                    <button class="practice-time-btn" data-time="60" data-selected="true">60s</button>
+                    <button class="practice-time-btn selected" data-time="60">60s</button>
                     <button class="practice-time-btn" data-time="120">2m</button>
                     <button class="practice-time-btn" data-time="300">5m</button>
                     <button class="practice-time-btn" data-time="600">10m</button>
@@ -262,6 +277,7 @@
         </div>
     </div>
 
+    <script src="logic.js"></script>
     <script src="script.js"></script>
 </body>
 </html> 
