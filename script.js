@@ -379,15 +379,16 @@ class ZetaMathGame {
     }
     
     saveGameSession() {
-        let gameHistory = JSON.parse(localStorage.getItem('zetamath_history') || '[]');
+        const gameHistory = this.loadProgress();
         gameHistory.push(this.currentSession);
-        gameHistory = ZetaMathLogic.capList(gameHistory, ZetaMathLogic.HISTORY_LIMIT);
-        localStorage.setItem('zetamath_history', JSON.stringify(gameHistory));
+        localStorage.setItem(
+            'zetamath_history',
+            JSON.stringify(ZetaMathLogic.capList(gameHistory, ZetaMathLogic.HISTORY_LIMIT))
+        );
     }
     
     loadProgress() {
-        const history = JSON.parse(localStorage.getItem('zetamath_history') || '[]');
-        return history;
+        return ZetaMathLogic.safeParseJSON(localStorage.getItem('zetamath_history'), []);
     }
     
     showProgress() {
@@ -959,7 +960,7 @@ class ZetaMathGame {
         });
         
         // Generate recommendation
-        let recommendation = '';
+        let recommendation;
         let focusOperation = 'all';
         
         if (weakestOperation && lowestAccuracy < 80) {
@@ -1078,14 +1079,7 @@ class ZetaMathGame {
     }
 
     getWrongQuestions() {
-        const raw = localStorage.getItem('zetamath_wrong_questions');
-        if (!raw) return [];
-        try {
-            const parsed = JSON.parse(raw);
-            return Array.isArray(parsed) ? parsed : [];
-        } catch {
-            return [];
-        }
+        return ZetaMathLogic.safeParseJSON(localStorage.getItem('zetamath_wrong_questions'), []);
     }
     
     clearWrongQuestions() {

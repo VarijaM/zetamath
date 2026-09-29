@@ -1,4 +1,3 @@
-/* global globalThis, module */
 (function (root, factory) {
     const api = factory();
     if (typeof module === 'object' && module.exports) {
@@ -286,6 +285,18 @@
         })[0];
     }
 
+    function safeParseJSON(raw, fallback) {
+        if (typeof raw !== 'string' || raw.trim() === '') return fallback;
+        try {
+            const value = JSON.parse(raw);
+            if (Array.isArray(fallback) && !Array.isArray(value)) return fallback;
+            if (value === null || value === undefined) return fallback;
+            return value;
+        } catch {
+            return fallback;
+        }
+    }
+
     function sessionStats(questions) {
         const total = questions.length;
         let correct = 0;
@@ -320,6 +331,7 @@
         rememberWrongQuestion,
         applyPracticeResult,
         pickPracticeQuestion,
+        safeParseJSON,
         sessionStats
     };
 }));

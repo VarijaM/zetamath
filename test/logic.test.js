@@ -199,6 +199,15 @@ test('practice picking prefers the least practiced question without changing the
     assert.equal(logic.pickPracticeQuestion([]), null);
 });
 
+test('safeParseJSON falls back when storage is missing or corrupt', () => {
+    assert.deepEqual(logic.safeParseJSON(null, []), []);
+    assert.deepEqual(logic.safeParseJSON('', []), []);
+    assert.deepEqual(logic.safeParseJSON('{', []), []);
+    assert.deepEqual(logic.safeParseJSON('{"not":"an array"}', []), []);
+    assert.deepEqual(logic.safeParseJSON('null', []), []);
+    assert.deepEqual(logic.safeParseJSON('[1,2]', []), [1, 2]);
+});
+
 test('session stats and history cap', () => {
     const stats = logic.sessionStats([
         { correct: true, timeSpent: 1 },
