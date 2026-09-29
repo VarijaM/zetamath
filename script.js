@@ -24,23 +24,10 @@ class ZetaMathGame {
             endTime: null
         };
         
-        // Game mode configurations
         this.modes = {
-            easy: {
-                addition: { min: 2, max: 60 },
-                subtraction: { min: 2, max: 60 },
-                multiplication: { factor1: { min: 2, max: 12 }, factor2: { min: 2, max: 20 } }
-            },
-            medium: {
-                addition: { min: 2, max: 100 },
-                subtraction: { min: 2, max: 100 },
-                multiplication: { factor1: { min: 2, max: 12 }, factor2: { min: 2, max: 100 } }
-            },
-            hard: {
-                addition: { min: 2, max: 300 },
-                subtraction: { min: 2, max: 300 },
-                multiplication: { factor1: { min: 2, max: 20 }, factor2: { min: 2, max: 200 } }
-            },
+            easy: ZetaMathLogic.PRESET_MODES.easy,
+            medium: ZetaMathLogic.PRESET_MODES.medium,
+            hard: ZetaMathLogic.PRESET_MODES.hard,
             free: {
                 operations: ['addition', 'subtraction', 'multiplication', 'division'],
                 ranges: {}
@@ -140,8 +127,9 @@ class ZetaMathGame {
 
         // A normal start passes no options, so a previous drill cannot leak in.
         // Drills pass the mode and focus they want for this round only.
-        this.focusOperation = options.focusOperation || null;
-        this.practiceMode = options.practiceMode || null;
+        const flags = ZetaMathLogic.resolveStartOptions(options);
+        this.focusOperation = flags.focusOperation;
+        this.practiceMode = flags.practiceMode;
         
         this.resetGame();
         this.currentSession = {
@@ -162,72 +150,8 @@ class ZetaMathGame {
         return document.getElementById(id).value;
     }
 
-    validateFreeConfig({ operations, ranges, timeLimit }) {
-        if (!Number.isFinite(timeLimit) || timeLimit <= 0) {
-            return { ok: false, message: 'Please select a time limit.' };
-        }
-        if (!operations.length) {
-            return { ok: false, message: 'Please select at least one operation.' };
-        }
-
-        const checkPair = (label, minRaw, maxRaw, minimum) => {
-            const minText = String(minRaw ?? '').trim();
-            const maxText = String(maxRaw ?? '').trim();
-            if (!/^-?\d+$/.test(minText) || !/^-?\d+$/.test(maxText)) {
-                return { error: `${label} needs whole-number bounds.` };
-            }
-            const min = Number(minText);
-            const max = Number(maxText);
-            if (min < minimum || max < minimum) {
-                return { error: `${label} must be at least ${minimum}.` };
-            }
-            if (min > max) {
-                return { error: `${label} minimum cannot be greater than its maximum.` };
-            }
-            return { min, max };
-        };
-
-        const addition = checkPair('Addition', ranges.addition.min, ranges.addition.max, 0);
-        if (addition.error && operations.includes('addition')) return { ok: false, message: addition.error };
-        const subtraction = checkPair('Subtraction', ranges.subtraction.min, ranges.subtraction.max, 0);
-        if (subtraction.error && operations.includes('subtraction')) return { ok: false, message: subtraction.error };
-
-        const needsFactors = operations.includes('multiplication') || operations.includes('division');
-        const factor1 = checkPair(
-            'Multiplication factor 1',
-            ranges.multiplication.factor1.min,
-            ranges.multiplication.factor1.max,
-            1
-        );
-        const factor2 = checkPair(
-            'Multiplication factor 2',
-            ranges.multiplication.factor2.min,
-            ranges.multiplication.factor2.max,
-            1
-        );
-        if (needsFactors && factor1.error) return { ok: false, message: factor1.error };
-        if (needsFactors && factor2.error) {
-            return {
-                ok: false,
-                message: factor2.error.includes('at least')
-                    ? 'Multiplication factors must be at least 1 so division never divides by zero.'
-                    : factor2.error
-            };
-        }
-
-        return {
-            ok: true,
-            timeLimit,
-            operations,
-            ranges: {
-                addition: addition.error ? { min: 0, max: 0 } : { min: addition.min, max: addition.max },
-                subtraction: subtraction.error ? { min: 0, max: 0 } : { min: subtraction.min, max: subtraction.max },
-                multiplication: {
-                    factor1: factor1.error ? { min: 1, max: 1 } : { min: factor1.min, max: factor1.max },
-                    factor2: factor2.error ? { min: 1, max: 1 } : { min: factor2.min, max: factor2.max }
-                }
-            }
-        };
+    validateFreeConfig(config) {
+        return ZetaMathLogic.validateFreeConfig(config);
     }
 
     startFreeGame() {
@@ -294,13 +218,11 @@ class ZetaMathGame {
     }
 
     remainingSeconds(endAt, now) {
-        return Math.max(0, Math.ceil((endAt - now) / 1000));
+        return ZetaMathLogic.remainingSeconds(endAt, now);
     }
 
     isLowTime(secondsRemaining) {
-        if (secondsRemaining <= 0) return false;
-        const threshold = Math.min(10, Math.max(3, Math.ceil(this.currentTimeLimit * 0.2)));
-        return secondsRemaining <= threshold;
+        return ZetaMathLogic.isLowTime(secondsRemaining, this.currentTimeLimit);
     }
 
     updateTimerDisplay() {
@@ -338,10 +260,7 @@ class ZetaMathGame {
     }
     
     parseNumericAnswer(raw) {
-        if (typeof raw !== 'string') return null;
-        const trimmed = raw.trim();
-        if (!/^-?\d+$/.test(trimmed)) return null;
-        return Number(trimmed);
+        return ZetaMathLogic.parseNumericAnswer(raw);
     }
 
     setAnsweringEnabled(enabled) {
@@ -376,11 +295,7 @@ class ZetaMathGame {
         
         this.gameData.push(questionData);
         this.currentSession.questions.push(questionData);
-        
-        // Store wrong questions for practice
-        if (!questionData.correct) {
-            this.saveWrongQuestion(questionData);
-        }
+        this.recordAnswerForPractice(questionData, correct);
         
         const feedback = document.getElementById('feedback');
         if (correct) {
@@ -433,11 +348,10 @@ class ZetaMathGame {
     }
     
     showGameResults() {
-        const totalQuestions = this.gameData.length;
-        const correctAnswers = this.gameData.filter(q => q.correct).length;
-        const accuracy = totalQuestions > 0 ? Math.round((correctAnswers / totalQuestions) * 100) : 0;
-        const totalTime = this.gameData.reduce((sum, q) => sum + q.timeSpent, 0);
-        const avgTime = totalQuestions > 0 ? (totalTime / totalQuestions).toFixed(1) : '0.0';
+        const stats = ZetaMathLogic.sessionStats(this.gameData);
+        const totalQuestions = stats.total;
+        const accuracy = stats.accuracy;
+        const avgTime = totalQuestions > 0 ? stats.avgTime.toFixed(1) : '0.0';
         
         document.getElementById('final-score').textContent = this.score;
         document.getElementById('total-questions').textContent = totalQuestions;
@@ -467,12 +381,7 @@ class ZetaMathGame {
     saveGameSession() {
         let gameHistory = JSON.parse(localStorage.getItem('zetamath_history') || '[]');
         gameHistory.push(this.currentSession);
-        
-        // Keep only last 100 sessions to prevent storage overflow
-        if (gameHistory.length > 100) {
-            gameHistory = gameHistory.slice(-100);
-        }
-        
+        gameHistory = ZetaMathLogic.capList(gameHistory, ZetaMathLogic.HISTORY_LIMIT);
         localStorage.setItem('zetamath_history', JSON.stringify(gameHistory));
     }
     
@@ -1148,28 +1057,35 @@ class ZetaMathGame {
         }
     }
     
-    saveWrongQuestion(questionData) {
-        let wrongQuestions = JSON.parse(localStorage.getItem('zetamath_wrong_questions') || '[]');
-        
-        // Add the wrong question with timestamp
-        const wrongQuestion = {
-            ...questionData,
-            timestamp: Date.now(),
-            practiceCount: 0
-        };
-        
-        wrongQuestions.push(wrongQuestion);
-        
-        // Keep only last 50 wrong questions to prevent storage overflow
-        if (wrongQuestions.length > 50) {
-            wrongQuestions = wrongQuestions.slice(-50);
-        }
-        
-        localStorage.setItem('zetamath_wrong_questions', JSON.stringify(wrongQuestions));
+    rememberWrongQuestion(list, question, now) {
+        return ZetaMathLogic.rememberWrongQuestion(list, question, now);
     }
-    
+
+    applyPracticeResult(list, question, correct, now) {
+        return ZetaMathLogic.applyPracticeResult(list, question, correct, now);
+    }
+
+    pickPracticeQuestion(list) {
+        return ZetaMathLogic.pickPracticeQuestion(list);
+    }
+
+    recordAnswerForPractice(questionData, correct) {
+        const list = this.getWrongQuestions();
+        const next = this.practiceMode === 'wrong-questions'
+            ? this.applyPracticeResult(list, questionData, correct)
+            : (correct ? list : this.rememberWrongQuestion(list, questionData));
+        localStorage.setItem('zetamath_wrong_questions', JSON.stringify(next));
+    }
+
     getWrongQuestions() {
-        return JSON.parse(localStorage.getItem('zetamath_wrong_questions') || '[]');
+        const raw = localStorage.getItem('zetamath_wrong_questions');
+        if (!raw) return [];
+        try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
     }
     
     clearWrongQuestions() {
@@ -1177,38 +1093,20 @@ class ZetaMathGame {
     }
     
     generateWrongQuestionForPractice() {
-        const wrongQuestions = this.getWrongQuestions();
+        const selectedQuestion = this.pickPracticeQuestion(this.getWrongQuestions());
         
-        if (wrongQuestions.length === 0) {
-            // Fallback to regular question generation
+        if (!selectedQuestion) {
             return this.generateRegularQuestion();
         }
         
-        // Sort by practice count (least practiced first) and recent timestamp
-        wrongQuestions.sort((a, b) => {
-            if (a.practiceCount !== b.practiceCount) {
-                return a.practiceCount - b.practiceCount;
-            }
-            return b.timestamp - a.timestamp;
-        });
-        
-        // Pick from the least practiced questions
-        const selectedQuestion = wrongQuestions[0];
-        
-        // Create a new question based on the wrong one
         this.currentQuestion = {
             operation: selectedQuestion.operation,
             num1: selectedQuestion.num1,
             num2: selectedQuestion.num2,
             answer: selectedQuestion.answer,
             display: selectedQuestion.display,
-            isFromWrongQuestions: true,
-            originalQuestionId: selectedQuestion.timestamp
+            isFromWrongQuestions: true
         };
-        
-        // Increment practice count
-        selectedQuestion.practiceCount++;
-        localStorage.setItem('zetamath_wrong_questions', JSON.stringify(wrongQuestions));
         
         document.getElementById('question-display').textContent = this.currentQuestion.display;
         document.getElementById('answer-input').value = '';
@@ -1216,82 +1114,14 @@ class ZetaMathGame {
     }
     
     generateRegularQuestion() {
-        const mode = this.currentMode;
-        let operation, num1, num2, answer;
-        
-        // Check if we're in a focused practice drill
-        if (this.focusOperation && this.focusOperation !== 'all') {
-            operation = this.focusOperation;
-        } else if (mode === 'free') {
-            const operations = this.modes.free.operations;
-            operation = operations[Math.floor(Math.random() * operations.length)];
-        } else if (mode === 'custom') {
-            // Custom mode for practice drills with specific focus
-            operation = this.focusOperation || 'addition';
-        } else {
-            const operations = ['addition', 'subtraction', 'multiplication', 'division'];
-            operation = operations[Math.floor(Math.random() * operations.length)];
-        }
-        
-        switch (operation) {
-            case 'addition':
-                const addRange = mode === 'free' ? this.modes.free.ranges.addition : this.modes[mode].addition;
-                num1 = this.randomBetween(addRange.min, addRange.max);
-                num2 = this.randomBetween(addRange.min, addRange.max);
-                answer = num1 + num2;
-                this.currentQuestion = {
-                    operation: 'addition',
-                    num1, num2, answer,
-                    display: `${num1} + ${num2} = ?`
-                };
-                break;
-                
-            case 'subtraction':
-                const subRange = mode === 'free' ? this.modes.free.ranges.subtraction : this.modes[mode].subtraction;
-                num1 = this.randomBetween(subRange.min, subRange.max);
-                num2 = this.randomBetween(subRange.min, Math.min(num1, subRange.max));
-                answer = num1 - num2;
-                this.currentQuestion = {
-                    operation: 'subtraction',
-                    num1, num2, answer,
-                    display: `${num1} - ${num2} = ?`
-                };
-                break;
-                
-            case 'multiplication':
-                const mulRange = mode === 'free' ? this.modes.free.ranges.multiplication : this.modes[mode].multiplication;
-                num1 = this.randomBetween(mulRange.factor1.min, mulRange.factor1.max);
-                num2 = this.randomBetween(mulRange.factor2.min, mulRange.factor2.max);
-                answer = num1 * num2;
-                this.currentQuestion = {
-                    operation: 'multiplication',
-                    num1, num2, answer,
-                    display: `${num1} × ${num2} = ?`
-                };
-                break;
-                
-            case 'division':
-                // Reverse multiplication for division
-                const divRange = mode === 'free' ? this.modes.free.ranges.multiplication : this.modes[mode].multiplication;
-                const factor1 = this.randomBetween(divRange.factor1.min, divRange.factor1.max);
-                const factor2 = this.randomBetween(divRange.factor2.min, divRange.factor2.max);
-                const product = factor1 * factor2;
-                answer = factor1;
-                this.currentQuestion = {
-                    operation: 'division',
-                    num1: product, num2: factor2, answer,
-                    display: `${product} ÷ ${factor2} = ?`
-                };
-                break;
-        }
-        
+        this.currentQuestion = ZetaMathLogic.generateQuestion({
+            mode: this.currentMode,
+            modes: this.modes,
+            focusOperation: this.focusOperation
+        });
         document.getElementById('question-display').textContent = this.currentQuestion.display;
         document.getElementById('answer-input').value = '';
         document.getElementById('answer-input').focus();
-    }
-    
-    randomBetween(min, max) {
-        return Math.floor(Math.random() * (max - min + 1)) + min;
     }
 }
 
