@@ -313,6 +313,193 @@
         };
     }
 
+    const MIN_OPERATION_SAMPLE = 5;
+    const ACCURACY_TARGET = 80;
+    const SLOW_THRESHOLD_SECONDS = 3;
+
+    function operationLabel(operation) {
+        return operation.charAt(0).toUpperCase() + operation.slice(1);
+    }
+
+    function questionsOf(session) {
+        return Array.isArray(session.questions) ? session.questions : [];
+    }
+
+    function summarizeOperations(history) {
+        const stats = {
+            addition: { total: 0, correct: 0, totalTime: 0 },
+            subtraction: { total: 0, correct: 0, totalTime: 0 },
+            multiplication: { total: 0, correct: 0, totalTime: 0 },
+            division: { total: 0, correct: 0, totalTime: 0 }
+        };
+        history.forEach(session => {
+            questionsOf(session).forEach(question => {
+                const bucket = stats[question.operation];
+                if (!bucket) return;
+                bucket.total += 1;
+                if (question.correct) bucket.correct += 1;
+                bucket.totalTime += Number(question.timeSpent) || 0;
+            });
+        });
+        return stats;
+    }
+
+    function weightedAccuracy(history) {
+        let correct = 0;
+        let total = 0;
+        history.forEach(session => {
+            questionsOf(session).forEach(question => {
+                total += 1;
+                if (question.correct) correct += 1;
+            });
+        });
+        return {
+            correct,
+            total,
+            percent: total > 0 ? (correct / total) * 100 : 0
+        };
+    }
+
+    function progressSummary(history) {
+        const accuracy = weightedAccuracy(history);
+        let bestScore = 0;
+        let fastestAnswer = null;
+        history.forEach(session => {
+            const stats = sessionStats(questionsOf(session));
+            if (stats.correct > bestScore) bestScore = stats.correct;
+            questionsOf(session).forEach(question => {
+                if (!question.correct) return;
+                if (fastestAnswer === null || question.timeSpent < fastestAnswer) {
+                    fastestAnswer = question.timeSpent;
+                }
+            });
+        });
+        return {
+            totalGames: history.length,
+            bestScore,
+            avgAccuracy: accuracy.total > 0 ? Math.round(accuracy.percent) : 0,
+            fastestAnswer,
+            questionCount: accuracy.total,
+            correctCount: accuracy.correct
+        };
+    }
+
+    function recommendedMode(history) {
+        const { percent, total } = weightedAccuracy(history.slice(-5));
+        if (total < MIN_OPERATION_SAMPLE) return 'easy';
+        if (percent >= 90) return 'hard';
+        if (percent >= 75) return 'medium';
+        return 'easy';
+    }
+
+    function recommendPractice(history) {
+        if (!history.length) {
+            return {
+                title: 'Start with an easy round',
+                paragraphs: [
+                    'There is no history yet. A 60 second easy round is a good baseline across all four operations.'
+                ],
+                config: { mode: 'easy', focus: 'all' }
+            };
+        }
+
+        const stats = summarizeOperations(history);
+        let weakest = null;
+        let lowestAccuracy = 100;
+        let slowest = null;
+        let slowestTime = 0;
+        Object.keys(stats).forEach(operation => {
+            const stat = stats[operation];
+            if (stat.total < MIN_OPERATION_SAMPLE) return;
+            const accuracy = (stat.correct / stat.total) * 100;
+            const avgTime = stat.totalTime / stat.total;
+            if (accuracy < lowestAccuracy) {
+                lowestAccuracy = accuracy;
+                weakest = operation;
+            }
+            if (avgTime > slowestTime) {
+                slowestTime = avgTime;
+                slowest = operation;
+            }
+        });
+
+        const mode = recommendedMode(history);
+        if (weakest && lowestAccuracy < ACCURACY_TARGET) {
+            const name = operationLabel(weakest);
+            return {
+                title: 'Accuracy focus',
+                paragraphs: [
+                    `${name} accuracy is ${Math.round(lowestAccuracy)}% across ${stats[weakest].total} questions.`,
+                    `Practice ${name.toLowerCase()} on ${mode} until it stays at or above ${ACCURACY_TARGET}%.`
+                ],
+                config: { mode, focus: weakest }
+            };
+        }
+        if (slowest && slowestTime > SLOW_THRESHOLD_SECONDS) {
+            const name = operationLabel(slowest);
+            return {
+                title: 'Speed focus',
+                paragraphs: [
+                    `${name} is averaging ${slowestTime.toFixed(1)}s, above the ${SLOW_THRESHOLD_SECONDS}s target.`,
+                    `A ${mode} speed drill on ${name.toLowerCase()} is the next step.`
+                ],
+                config: { mode, focus: slowest }
+            };
+        }
+
+        const qualified = Object.values(stats).some(stat => stat.total >= MIN_OPERATION_SAMPLE);
+        return {
+            title: qualified ? 'Mixed practice' : 'Keep playing',
+            paragraphs: [
+                qualified
+                    ? 'Recent results are at or above the accuracy and speed targets. Mixed practice will keep all four operations sharp.'
+                    : `Each operation needs at least ${MIN_OPERATION_SAMPLE} answered questions before a single miss can pick the drill.`
+            ],
+            config: { mode, focus: 'all' }
+        };
+    }
+
+    function overviewSeries(history, count = 10) {
+        return history.slice(-count).map((session, index) => {
+            const stats = sessionStats(questionsOf(session));
+            return {
+                label: `Game ${index + 1}`,
+                score: stats.correct,
+                accuracy: stats.accuracy
+            };
+        });
+    }
+
+    function timeModeSummary(history) {
+        const buckets = {};
+        history.forEach(session => {
+            const timeLimit = session.timeLimit;
+            if (!buckets[timeLimit]) {
+                buckets[timeLimit] = { total: 0, correct: 0, sessions: 0, bestScore: 0 };
+            }
+            const stats = sessionStats(questionsOf(session));
+            buckets[timeLimit].total += stats.total;
+            buckets[timeLimit].correct += stats.correct;
+            buckets[timeLimit].sessions += 1;
+            buckets[timeLimit].bestScore = Math.max(buckets[timeLimit].bestScore, stats.correct);
+        });
+        return Object.keys(buckets)
+            .sort((a, b) => Number(a) - Number(b))
+            .map(time => {
+                const stat = buckets[time];
+                const seconds = Number(time);
+                return {
+                    timeLimit: seconds,
+                    label: seconds >= 60 ? `${Math.floor(seconds / 60)}m` : `${seconds}s`,
+                    sessions: stat.sessions,
+                    bestScore: stat.bestScore,
+                    totalQuestions: stat.total,
+                    accuracy: stat.total > 0 ? Math.round((stat.correct / stat.total) * 100) : 0,
+                    avgScore: stat.sessions > 0 ? Math.round(stat.correct / stat.sessions) : 0
+                };
+            });
+    }
+
     return {
         HISTORY_LIMIT,
         WRONG_QUESTION_LIMIT,
@@ -332,6 +519,16 @@
         applyPracticeResult,
         pickPracticeQuestion,
         safeParseJSON,
-        sessionStats
+        sessionStats,
+        MIN_OPERATION_SAMPLE,
+        ACCURACY_TARGET,
+        SLOW_THRESHOLD_SECONDS,
+        summarizeOperations,
+        weightedAccuracy,
+        progressSummary,
+        recommendedMode,
+        recommendPractice,
+        overviewSeries,
+        timeModeSummary
     };
 }));

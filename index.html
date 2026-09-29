@@ -187,6 +187,7 @@
         <!-- Progress Screen -->
         <div id="progress-screen" class="screen">
             <h2>Your Progress</h2>
+            <p id="no-progress-message" class="empty-message" hidden>No games yet. Finish a round and your charts will show up here.</p>
             <div class="progress-tabs">
                 <button class="tab-btn active" data-tab="overview">Overview</button>
                 <button class="tab-btn" data-tab="by-operation">By Operation</button>
@@ -241,9 +242,9 @@
             
             <div class="practice-options">
                 <div class="practice-option-card" id="ai-recommendation-card">
-                    <h3>🎯 AI Recommended Practice</h3>
+                    <h3>Recommended practice</h3>
                     <div id="drill-description"></div>
-                    <button id="start-ai-drill">Start AI Recommended Drill</button>
+                    <button id="start-ai-drill">Start recommended drill</button>
                 </div>
                 
                 <div class="practice-option-card" id="wrong-questions-card">

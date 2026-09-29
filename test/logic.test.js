@@ -208,6 +208,76 @@ test('safeParseJSON falls back when storage is missing or corrupt', () => {
     assert.deepEqual(logic.safeParseJSON('[1,2]', []), [1, 2]);
 });
 
+test('average accuracy weighs every question equally', () => {
+    const history = [
+        { questions: [{ correct: true, timeSpent: 1, operation: 'addition' }] },
+        {
+            questions: Array.from({ length: 9 }, () => ({
+                correct: false,
+                timeSpent: 1,
+                operation: 'addition'
+            }))
+        }
+    ];
+    assert.equal(logic.progressSummary(history).avgAccuracy, 10);
+    assert.equal(logic.progressSummary([]).avgAccuracy, 0);
+    assert.equal(logic.progressSummary([]).fastestAnswer, null);
+});
+
+test('recommendations wait for five answers in an operation', () => {
+    const oneMiss = logic.recommendPractice([{
+        questions: [{ operation: 'division', correct: false, timeSpent: 8 }]
+    }]);
+    assert.equal(oneMiss.config.focus, 'all');
+    assert.equal(oneMiss.config.mode, 'easy');
+
+    const fiveMisses = logic.recommendPractice([{
+        questions: Array.from({ length: 5 }, () => ({
+            operation: 'addition',
+            correct: false,
+            timeSpent: 1
+        }))
+    }]);
+    assert.equal(fiveMisses.config.focus, 'addition');
+    assert.equal(fiveMisses.config.mode, 'easy');
+
+    const fastAndAccurate = logic.recommendPractice([{
+        questions: Array.from({ length: 8 }, (_, index) => ({
+            operation: logic.OPERATIONS[index % 4],
+            correct: true,
+            timeSpent: 1
+        }))
+    }]);
+    assert.equal(fastAndAccurate.config.focus, 'all');
+    assert.equal(fastAndAccurate.config.mode, 'hard');
+
+    const slow = [];
+    for (let i = 0; i < 5; i += 1) {
+        slow.push({ operation: 'multiplication', correct: true, timeSpent: 4 });
+        slow.push({ operation: 'addition', correct: true, timeSpent: 1 });
+    }
+    assert.equal(logic.recommendPractice([{ questions: slow }]).config.focus, 'multiplication');
+    assert.equal(logic.recommendPractice([]).config.mode, 'easy');
+});
+
+test('unknown operations do not break the summary', () => {
+    const stats = logic.summarizeOperations([{
+        questions: [{ operation: 'algebra', correct: false, timeSpent: 9 }]
+    }]);
+    assert.equal(stats.addition.total, 0);
+    assert.equal(stats.division.total, 0);
+});
+
+test('time mode summary labels minutes and weights accuracy', () => {
+    const rows = logic.timeModeSummary([
+        { timeLimit: 60, questions: [{ correct: true, timeSpent: 1 }, { correct: false, timeSpent: 1 }] },
+        { timeLimit: 15, questions: [{ correct: true, timeSpent: 1 }] }
+    ]);
+    assert.deepEqual(rows.map(row => row.label), ['15s', '1m']);
+    assert.equal(rows[1].accuracy, 50);
+    assert.equal(rows[1].avgScore, 1);
+});
+
 test('session stats and history cap', () => {
     const stats = logic.sessionStats([
         { correct: true, timeSpent: 1 },

@@ -438,6 +438,25 @@ button:disabled {
     display: block;
 }
 
+.empty-message {
+    text-align: center;
+    color: #4a5568;
+    padding: 16px;
+    margin-bottom: 20px;
+    background: #f7fafc;
+    border-radius: 8px;
+}
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    margin-top: 8px;
+    background: #f7fafc;
+    border-radius: 8px;
+}
+
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
