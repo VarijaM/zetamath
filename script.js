@@ -130,8 +130,13 @@ class ZetaMathGame {
         document.getElementById(screenId).classList.add('active');
     }
     
-    startGame() {
+    startGame(options = {}) {
         if (!this.currentMode || !this.currentTimeLimit) return;
+
+        // A normal start passes no options, so a previous drill cannot leak in.
+        // Drills pass the mode and focus they want for this round only.
+        this.focusOperation = options.focusOperation || null;
+        this.practiceMode = options.practiceMode || null;
         
         this.resetGame();
         this.currentSession = {
@@ -141,14 +146,6 @@ class ZetaMathGame {
             startTime: Date.now(),
             endTime: null
         };
-        
-        // Reset focus operation and practice mode for regular games (not practice drills)
-        if (!this.focusOperation) {
-            this.focusOperation = null;
-        }
-        if (!this.practiceMode) {
-            this.practiceMode = null;
-        }
         
         this.showScreen('game-screen');
         this.startTimer();
@@ -970,20 +967,15 @@ class ZetaMathGame {
             return;
         }
         
-        // Set up drill based on AI recommendation
+        // Set up drill based on the recommendation. Flags are applied inside
+        // startGame so they cannot be left over from a previous round.
         this.currentMode = this.currentDrillConfig.mode;
         this.currentTimeLimit = this.currentPracticeTimeLimit;
-        this.practiceMode = 'ai-recommendation';
-        
-        // If focusing on specific operation, set focus
-        if (this.currentDrillConfig.focus !== 'all') {
-            this.focusOperation = this.currentDrillConfig.focus;
-            console.log(`Starting AI practice drill focused on: ${this.focusOperation}`);
-        } else {
-            this.focusOperation = null;
-        }
-        
-        this.startGame();
+        const focus = this.currentDrillConfig.focus !== 'all' ? this.currentDrillConfig.focus : null;
+        this.startGame({
+            practiceMode: 'recommended',
+            focusOperation: focus
+        });
     }
     
     startWrongQuestionsDrill() {
@@ -1001,11 +993,7 @@ class ZetaMathGame {
         // Set up drill for wrong questions
         this.currentMode = 'medium'; // Default difficulty for wrong questions
         this.currentTimeLimit = this.currentPracticeTimeLimit;
-        this.practiceMode = 'wrong-questions';
-        this.focusOperation = null;
-        
-        console.log(`Starting wrong questions drill with ${wrongQuestions.length} questions`);
-        this.startGame();
+        this.startGame({ practiceMode: 'wrong-questions' });
     }
     
     clearWrongQuestionsConfirm() {
