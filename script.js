@@ -158,43 +158,107 @@ class ZetaMathGame {
         document.getElementById('answer-input').focus();
     }
     
+    readInput(id) {
+        return document.getElementById(id).value;
+    }
+
+    validateFreeConfig({ operations, ranges, timeLimit }) {
+        if (!Number.isFinite(timeLimit) || timeLimit <= 0) {
+            return { ok: false, message: 'Please select a time limit.' };
+        }
+        if (!operations.length) {
+            return { ok: false, message: 'Please select at least one operation.' };
+        }
+
+        const checkPair = (label, minRaw, maxRaw, minimum) => {
+            const minText = String(minRaw ?? '').trim();
+            const maxText = String(maxRaw ?? '').trim();
+            if (!/^-?\d+$/.test(minText) || !/^-?\d+$/.test(maxText)) {
+                return { error: `${label} needs whole-number bounds.` };
+            }
+            const min = Number(minText);
+            const max = Number(maxText);
+            if (min < minimum || max < minimum) {
+                return { error: `${label} must be at least ${minimum}.` };
+            }
+            if (min > max) {
+                return { error: `${label} minimum cannot be greater than its maximum.` };
+            }
+            return { min, max };
+        };
+
+        const addition = checkPair('Addition', ranges.addition.min, ranges.addition.max, 0);
+        if (addition.error && operations.includes('addition')) return { ok: false, message: addition.error };
+        const subtraction = checkPair('Subtraction', ranges.subtraction.min, ranges.subtraction.max, 0);
+        if (subtraction.error && operations.includes('subtraction')) return { ok: false, message: subtraction.error };
+
+        const needsFactors = operations.includes('multiplication') || operations.includes('division');
+        const factor1 = checkPair(
+            'Multiplication factor 1',
+            ranges.multiplication.factor1.min,
+            ranges.multiplication.factor1.max,
+            1
+        );
+        const factor2 = checkPair(
+            'Multiplication factor 2',
+            ranges.multiplication.factor2.min,
+            ranges.multiplication.factor2.max,
+            1
+        );
+        if (needsFactors && factor1.error) return { ok: false, message: factor1.error };
+        if (needsFactors && factor2.error) {
+            return {
+                ok: false,
+                message: factor2.error.includes('at least')
+                    ? 'Multiplication factors must be at least 1 so division never divides by zero.'
+                    : factor2.error
+            };
+        }
+
+        return {
+            ok: true,
+            timeLimit,
+            operations,
+            ranges: {
+                addition: addition.error ? { min: 0, max: 0 } : { min: addition.min, max: addition.max },
+                subtraction: subtraction.error ? { min: 0, max: 0 } : { min: subtraction.min, max: subtraction.max },
+                multiplication: {
+                    factor1: factor1.error ? { min: 1, max: 1 } : { min: factor1.min, max: factor1.max },
+                    factor2: factor2.error ? { min: 1, max: 1 } : { min: factor2.min, max: factor2.max }
+                }
+            }
+        };
+    }
+
     startFreeGame() {
-        // Get free mode configuration
         const operations = [];
         if (document.getElementById('add-check').checked) operations.push('addition');
         if (document.getElementById('sub-check').checked) operations.push('subtraction');
         if (document.getElementById('mul-check').checked) operations.push('multiplication');
         if (document.getElementById('div-check').checked) operations.push('division');
-        
-        if (operations.length === 0) {
-            alert('Please select at least one operation!');
-            return;
-        }
-        
-        // Get ranges
-        this.modes.free.operations = operations;
-        this.modes.free.ranges = {
-            addition: {
-                min: parseInt(document.getElementById('add-min').value),
-                max: parseInt(document.getElementById('add-max').value)
-            },
-            subtraction: {
-                min: parseInt(document.getElementById('sub-min').value),
-                max: parseInt(document.getElementById('sub-max').value)
-            },
-            multiplication: {
-                factor1: {
-                    min: parseInt(document.getElementById('mul-min1').value),
-                    max: parseInt(document.getElementById('mul-max1').value)
-                },
-                factor2: {
-                    min: parseInt(document.getElementById('mul-min2').value),
-                    max: parseInt(document.getElementById('mul-max2').value)
+
+        const parsed = this.validateFreeConfig({
+            operations,
+            timeLimit: this.currentTimeLimit,
+            ranges: {
+                addition: { min: this.readInput('add-min'), max: this.readInput('add-max') },
+                subtraction: { min: this.readInput('sub-min'), max: this.readInput('sub-max') },
+                multiplication: {
+                    factor1: { min: this.readInput('mul-min1'), max: this.readInput('mul-max1') },
+                    factor2: { min: this.readInput('mul-min2'), max: this.readInput('mul-max2') }
                 }
             }
-        };
-        
+        });
+
+        if (!parsed.ok) {
+            alert(parsed.message);
+            return;
+        }
+
+        this.modes.free.operations = parsed.operations;
+        this.modes.free.ranges = parsed.ranges;
         this.currentMode = 'free';
+        this.currentTimeLimit = parsed.timeLimit;
         this.startGame();
     }
     
