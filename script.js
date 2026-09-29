@@ -111,8 +111,9 @@ class ZetaMathGame {
     
     selectTime(time) {
         this.currentTimeLimit = time;
-        document.querySelectorAll('.time-btn').forEach(btn => btn.classList.remove('selected'));
-        document.querySelector(`[data-time="${time}"]`).classList.add('selected');
+        document.querySelectorAll('.time-btn').forEach(btn => {
+            btn.classList.toggle('selected', Number(btn.dataset.time) === time);
+        });
         this.checkStartGameButton();
     }
     
@@ -817,8 +818,9 @@ class ZetaMathGame {
     
     selectPracticeTime(time) {
         this.currentPracticeTimeLimit = time;
-        document.querySelectorAll('.practice-time-btn').forEach(btn => btn.classList.remove('selected'));
-        document.querySelector(`[data-time="${time}"]`).classList.add('selected');
+        document.querySelectorAll('.practice-time-btn').forEach(btn => {
+            btn.classList.toggle('selected', Number(btn.dataset.time) === time);
+        });
     }
     
     showPracticeDrill() {
@@ -831,12 +833,12 @@ class ZetaMathGame {
             this.currentPracticeTimeLimit = 60; // Default to 60 seconds
         }
         
-        // Update practice time button selection
-        document.querySelectorAll('.practice-time-btn').forEach(btn => btn.classList.remove('selected'));
-        const defaultBtn = document.querySelector(`[data-time="${this.currentPracticeTimeLimit}"]`);
-        if (defaultBtn) {
-            defaultBtn.classList.add('selected');
-        }
+        // Update practice time button selection only. Main-menu time buttons
+        // share the same data-time values, so a document-wide query would
+        // highlight those instead.
+        document.querySelectorAll('.practice-time-btn').forEach(btn => {
+            btn.classList.toggle('selected', Number(btn.dataset.time) === this.currentPracticeTimeLimit);
+        });
         
         // Update wrong questions info
         const wrongQuestions = this.getWrongQuestions();
