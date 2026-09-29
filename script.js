@@ -12,6 +12,9 @@ class ZetaMathGame {
         this.questionStartTime = null;
         this.timeRemaining = 0;
         this.timer = null;
+        this.feedbackTimer = null;
+        this.endAt = null;
+        this.acceptingAnswers = false;
         this.gameData = [];
         this.currentSession = {
             mode: null,
@@ -73,6 +76,7 @@ class ZetaMathGame {
             if (e.key === 'Enter') this.submitAnswer();
         });
         document.getElementById('submit-answer').addEventListener('click', () => this.submitAnswer());
+        document.getElementById('end-round-btn').addEventListener('click', () => this.endGame());
         
         // Results screen
         document.getElementById('play-again').addEventListener('click', () => this.playAgain());
@@ -205,21 +209,58 @@ class ZetaMathGame {
         document.getElementById('question-number').textContent = '1';
         document.getElementById('time-remaining').textContent = this.timeRemaining;
         document.getElementById('feedback').textContent = '';
-        document.getElementById('answer-input').value = '';
+        document.getElementById('feedback').className = '';
+        const answerInput = document.getElementById('answer-input');
+        answerInput.value = '';
+        answerInput.disabled = false;
+        document.getElementById('submit-answer').disabled = false;
+        this.acceptingAnswers = true;
+        if (this.feedbackTimer) {
+            clearTimeout(this.feedbackTimer);
+            this.feedbackTimer = null;
+        }
+        document.querySelector('#game-screen .timer').classList.remove('low');
     }
     
+    clearTimer() {
+        if (this.timer) {
+            clearInterval(this.timer);
+            this.timer = null;
+        }
+    }
+
+    remainingSeconds(endAt, now) {
+        return Math.max(0, Math.ceil((endAt - now) / 1000));
+    }
+
+    isLowTime(secondsRemaining) {
+        if (secondsRemaining <= 0) return false;
+        const threshold = Math.min(10, Math.max(3, Math.ceil(this.currentTimeLimit * 0.2)));
+        return secondsRemaining <= threshold;
+    }
+
+    updateTimerDisplay() {
+        document.getElementById('time-remaining').textContent = String(this.timeRemaining);
+        document.querySelector('#game-screen .timer').classList.toggle('low', this.isLowTime(this.timeRemaining));
+    }
+
     startTimer() {
-        this.timer = setInterval(() => {
-            this.timeRemaining--;
-            document.getElementById('time-remaining').textContent = this.timeRemaining;
-            
+        this.clearTimer();
+        this.endAt = Date.now() + this.currentTimeLimit * 1000;
+        const tick = () => {
+            if (!this.gameActive) return;
+            this.timeRemaining = this.remainingSeconds(this.endAt, Date.now());
+            this.updateTimerDisplay();
             if (this.timeRemaining <= 0) {
                 this.endGame();
             }
-        }, 1000);
+        };
+        tick();
+        this.timer = setInterval(tick, 200);
     }
     
     generateNextQuestion() {
+        if (!this.gameActive) return;
         this.questionStartTime = Date.now();
         
         // Check if we're in wrong questions practice mode
@@ -232,18 +273,40 @@ class ZetaMathGame {
         this.generateRegularQuestion();
     }
     
+    parseNumericAnswer(raw) {
+        if (typeof raw !== 'string') return null;
+        const trimmed = raw.trim();
+        if (!/^-?\d+$/.test(trimmed)) return null;
+        return Number(trimmed);
+    }
+
+    setAnsweringEnabled(enabled) {
+        this.acceptingAnswers = enabled;
+        document.getElementById('answer-input').disabled = !enabled;
+        document.getElementById('submit-answer').disabled = !enabled;
+    }
+
     submitAnswer() {
-        if (!this.gameActive) return;
-        
-        const userAnswer = parseInt(document.getElementById('answer-input').value);
+        if (!this.gameActive || !this.acceptingAnswers || !this.currentQuestion) return;
+
+        const userAnswer = this.parseNumericAnswer(document.getElementById('answer-input').value);
+        if (userAnswer === null) {
+            const feedback = document.getElementById('feedback');
+            feedback.textContent = 'Enter a whole number';
+            feedback.className = 'feedback-incorrect';
+            return;
+        }
+
+        this.setAnsweringEnabled(false);
         const correctAnswer = this.currentQuestion.answer;
         const timeSpent = (Date.now() - this.questionStartTime) / 1000;
-        
+        const correct = userAnswer === correctAnswer;
+
         const questionData = {
             ...this.currentQuestion,
             userAnswer,
             timeSpent,
-            correct: userAnswer === correctAnswer,
+            correct,
             questionNumber: this.questionNumber
         };
         
@@ -255,40 +318,49 @@ class ZetaMathGame {
             this.saveWrongQuestion(questionData);
         }
         
-        if (userAnswer === correctAnswer) {
+        const feedback = document.getElementById('feedback');
+        if (correct) {
             this.score++;
             document.getElementById('current-score').textContent = this.score;
-            document.getElementById('feedback').textContent = 'Correct!';
-            document.getElementById('feedback').className = 'feedback-correct';
+            feedback.textContent = 'Correct!';
+            feedback.className = 'feedback-correct';
             document.getElementById('question-display').classList.add('pulse');
-            
-            // Immediately move to next question
-            setTimeout(() => {
-                document.getElementById('question-display').classList.remove('pulse');
-                this.questionNumber++;
-                document.getElementById('question-number').textContent = this.questionNumber;
-                this.generateNextQuestion();
-                document.getElementById('feedback').textContent = '';
-            }, 200);
-            
+            this.scheduleAdvance(200);
         } else {
-            document.getElementById('feedback').textContent = `Incorrect! Answer was ${correctAnswer}`;
-            document.getElementById('feedback').className = 'feedback-incorrect';
+            feedback.textContent = `Incorrect! Answer was ${correctAnswer}`;
+            feedback.className = 'feedback-incorrect';
             document.getElementById('answer-input').classList.add('shake');
-            
-            setTimeout(() => {
-                document.getElementById('answer-input').classList.remove('shake');
-                this.questionNumber++;
-                document.getElementById('question-number').textContent = this.questionNumber;
-                this.generateNextQuestion();
-                document.getElementById('feedback').textContent = '';
-            }, 1000);
+            this.scheduleAdvance(1000);
         }
+    }
+
+    scheduleAdvance(delay) {
+        if (this.feedbackTimer) clearTimeout(this.feedbackTimer);
+        this.feedbackTimer = setTimeout(() => {
+            this.feedbackTimer = null;
+            if (!this.gameActive) return;
+            document.getElementById('question-display').classList.remove('pulse');
+            document.getElementById('answer-input').classList.remove('shake');
+            this.setAnsweringEnabled(true);
+            this.questionNumber++;
+            document.getElementById('question-number').textContent = this.questionNumber;
+            document.getElementById('feedback').textContent = '';
+            document.getElementById('feedback').className = '';
+            this.generateNextQuestion();
+        }, delay);
     }
     
     endGame() {
+        if (!this.gameActive) return;
         this.gameActive = false;
-        clearInterval(this.timer);
+        this.acceptingAnswers = false;
+        this.clearTimer();
+        if (this.feedbackTimer) {
+            clearTimeout(this.feedbackTimer);
+            this.feedbackTimer = null;
+        }
+        const timerBox = document.querySelector('#game-screen .timer');
+        if (timerBox) timerBox.classList.remove('low');
         this.currentSession.endTime = Date.now();
         
         this.saveGameSession();
@@ -317,7 +389,7 @@ class ZetaMathGame {
             div.className = 'question-detail';
             div.innerHTML = `
                 <span>Q${index + 1}: ${question.display.replace(' = ?', '')} = ${question.answer}</span>
-                <span>Your: ${question.userAnswer || 'No answer'}</span>
+                <span>Your: ${question.userAnswer}</span>
                 <span style="color: ${question.correct ? '#38a169' : '#e53e3e'}">${question.timeSpent.toFixed(1)}s</span>
             `;
             detailsContainer.appendChild(div);

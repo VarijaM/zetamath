@@ -270,10 +270,26 @@ button:disabled {
 .timer {
     font-size: 2rem;
     font-weight: bold;
-    color: #e53e3e;
-    background: #fed7d7;
+    color: #2d3748;
+    background: #edf2f7;
     padding: 10px 20px;
     border-radius: 10px;
+}
+
+.timer.low {
+    color: #e53e3e;
+    background: #fed7d7;
+}
+
+#end-round-btn {
+    margin-top: 0;
+    background: #718096;
+    padding: 8px 16px;
+    font-size: 0.95rem;
+}
+
+#end-round-btn:hover {
+    background: #4a5568;
 }
 
 .score, .question-count {
