@@ -123,18 +123,20 @@ class ZetaMathGame {
     }
     
     startGame(options = {}) {
-        if (!this.currentMode || !this.currentTimeLimit) return;
+        const roundTime = options.timeLimit ?? this.currentTimeLimit;
+        if (!this.currentMode || !roundTime) return false;
 
         // A normal start passes no options, so a previous drill cannot leak in.
-        // Drills pass the mode and focus they want for this round only.
+        // Drills pass the mode, focus, and duration for this round only.
         const flags = ZetaMathLogic.resolveStartOptions(options);
         this.focusOperation = flags.focusOperation;
         this.practiceMode = flags.practiceMode;
+        this.currentTimeLimit = roundTime;
         
         this.resetGame();
         this.currentSession = {
             mode: this.currentMode,
-            timeLimit: this.currentTimeLimit,
+            timeLimit: roundTime,
             questions: [],
             startTime: Date.now(),
             endTime: null
@@ -144,6 +146,7 @@ class ZetaMathGame {
         this.startTimer();
         this.generateNextQuestion();
         document.getElementById('answer-input').focus();
+        return true;
     }
     
     readInput(id) {
@@ -344,7 +347,15 @@ class ZetaMathGame {
         
         this.saveGameSession();
         this.showGameResults();
+        this.restoreMenuSelection();
         this.showScreen('results-screen');
+    }
+
+    restoreMenuSelection() {
+        if (!this.menuSnapshot) return;
+        this.currentMode = this.menuSnapshot.mode;
+        this.currentTimeLimit = this.menuSnapshot.timeLimit;
+        this.menuSnapshot = null;
     }
     
     showGameResults() {
@@ -906,15 +917,21 @@ class ZetaMathGame {
             return;
         }
         
-        // Set up drill based on the recommendation. Flags are applied inside
-        // startGame so they cannot be left over from a previous round.
+        // Keep the main-menu choice. The drill's mode and duration apply to this round only.
+        const previous = { mode: this.currentMode, timeLimit: this.currentTimeLimit };
         this.currentMode = this.currentDrillConfig.mode;
-        this.currentTimeLimit = this.currentPracticeTimeLimit;
         const focus = this.currentDrillConfig.focus !== 'all' ? this.currentDrillConfig.focus : null;
-        this.startGame({
+        const started = this.startGame({
             practiceMode: 'recommended',
-            focusOperation: focus
+            focusOperation: focus,
+            timeLimit: this.currentPracticeTimeLimit
         });
+        if (!started) {
+            this.currentMode = previous.mode;
+            this.currentTimeLimit = previous.timeLimit;
+            return;
+        }
+        this.menuSnapshot = previous;
     }
     
     startWrongQuestionsDrill() {
@@ -929,10 +946,18 @@ class ZetaMathGame {
             return;
         }
         
-        // Set up drill for wrong questions
-        this.currentMode = 'medium'; // Default difficulty for wrong questions
-        this.currentTimeLimit = this.currentPracticeTimeLimit;
-        this.startGame({ practiceMode: 'wrong-questions' });
+        const previous = { mode: this.currentMode, timeLimit: this.currentTimeLimit };
+        this.currentMode = 'medium';
+        const started = this.startGame({
+            practiceMode: 'wrong-questions',
+            timeLimit: this.currentPracticeTimeLimit
+        });
+        if (!started) {
+            this.currentMode = previous.mode;
+            this.currentTimeLimit = previous.timeLimit;
+            return;
+        }
+        this.menuSnapshot = previous;
     }
     
     clearWrongQuestionsConfirm() {
